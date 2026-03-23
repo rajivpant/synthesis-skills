@@ -5,12 +5,15 @@
 #   ./install.sh install    # Install all skills
 #   ./install.sh update     # Update to latest
 #   ./install.sh uninstall  # Remove all installed skills
+#   ./install.sh status     # Show installed skills and drift status
 
 set -e
 
 REPO_URL="https://github.com/rajivpant/synthesis-skills.git"
 REPO_NAME="synthesis-skills"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/synthesis-skills"
+SOURCE_REPO="github.com/rajivpant/synthesis-skills"
+SOURCE_TYPE="public"
 
 # Skill directories to install to (auto-detected)
 detect_targets() {
@@ -38,6 +41,45 @@ our_skill_names() {
     done
 }
 
+# Get current git commit hash from cache
+get_source_commit() {
+    if [ -d "$CACHE_DIR/.git" ]; then
+        git -C "$CACHE_DIR" rev-parse HEAD
+    else
+        echo "unknown"
+    fi
+}
+
+# Write .source.json provenance file for an installed skill
+write_source_json() {
+    skill_target_dir="$1"
+    skill_name="$2"
+    commit_hash="$3"
+
+    cat > "${skill_target_dir}/.source.json" <<ENDJSON
+{
+  "source_repo": "${SOURCE_REPO}",
+  "source_type": "${SOURCE_TYPE}",
+  "source_path": "${skill_name}/SKILL.md",
+  "source_commit": "${commit_hash}",
+  "installed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "installed_by": "install.sh"
+}
+ENDJSON
+}
+
+# Compute checksum of SKILL.md content (portable across macOS and Linux)
+skill_checksum() {
+    if command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | cut -d' ' -f1
+    elif command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | cut -d' ' -f1
+    else
+        # Fallback: use cksum
+        cksum "$1" | cut -d' ' -f1
+    fi
+}
+
 do_install() {
     echo "Installing Synthesis Skills..."
 
@@ -51,8 +93,10 @@ do_install() {
         git clone --quiet "$REPO_URL" "$CACHE_DIR"
     fi
 
+    COMMIT=$(get_source_commit)
     TARGETS=$(detect_targets)
     SKILL_COUNT=0
+    DRIFT_COUNT=0
 
     for target in $TARGETS; do
         mkdir -p "$target"
@@ -62,9 +106,27 @@ do_install() {
             case "$skill_name" in
                 .git|node_modules|.github) continue ;;
             esac
+
+            installed_dir="${target}/${skill_name}"
+
+            # Check for drift before overwriting
+            if [ -f "${installed_dir}/SKILL.md" ] && [ -f "${skill_dir}/SKILL.md" ]; then
+                installed_sum=$(skill_checksum "${installed_dir}/SKILL.md")
+                source_sum=$(skill_checksum "${skill_dir}/SKILL.md")
+                if [ "$installed_sum" != "$source_sum" ]; then
+                    # Check if this was from our repo
+                    if [ -f "${installed_dir}/.source.json" ]; then
+                        echo "  DRIFT: ${skill_name} — installed copy differs from source"
+                        DRIFT_COUNT=$((DRIFT_COUNT + 1))
+                    fi
+                fi
+            fi
+
             # Remove old version and copy fresh
-            rm -rf "${target}/${skill_name}"
-            cp -R "$skill_dir" "${target}/${skill_name}"
+            rm -rf "${installed_dir}"
+            cp -R "$skill_dir" "${installed_dir}"
+            # Write provenance
+            write_source_json "${installed_dir}" "${skill_name}" "${COMMIT}"
             SKILL_COUNT=$((SKILL_COUNT + 1))
         done
         echo "  Installed to: $target"
@@ -73,6 +135,10 @@ do_install() {
     UNIQUE_SKILLS=$(our_skill_names | wc -l | tr -d ' ')
     echo ""
     echo "Done. $UNIQUE_SKILLS skills installed to $(echo $TARGETS | wc -w | tr -d ' ') locations."
+    if [ "$DRIFT_COUNT" -gt 0 ]; then
+        echo "WARNING: $DRIFT_COUNT skill(s) had local modifications that were overwritten."
+        echo "  Use './install.sh status' before install to review drift."
+    fi
     echo "Restart your AI assistant to pick up the new skills."
 }
 
@@ -86,6 +152,81 @@ do_update() {
     echo "Updating Synthesis Skills..."
     git -C "$CACHE_DIR" pull --quiet
     do_install
+}
+
+do_status() {
+    echo "Synthesis Skills Status"
+    echo "======================"
+    echo ""
+
+    # Update cache if present
+    if [ -d "$CACHE_DIR/.git" ]; then
+        git -C "$CACHE_DIR" pull --quiet 2>/dev/null || true
+    else
+        echo "No cached repo. Run './install.sh install' first."
+        return
+    fi
+
+    TARGETS=$(detect_targets)
+    for target in $TARGETS; do
+        if [ ! -d "$target" ]; then
+            continue
+        fi
+        echo "Location: $target"
+        echo ""
+
+        INSTALLED=0
+        DRIFTED=0
+        ORPHANED=0
+
+        for skill_dir in $(list_skills "$CACHE_DIR"); do
+            skill_name=$(basename "$skill_dir")
+            case "$skill_name" in
+                .git|node_modules|.github) continue ;;
+            esac
+
+            installed_dir="${target}/${skill_name}"
+
+            if [ ! -d "$installed_dir" ]; then
+                echo "  MISSING: $skill_name"
+                continue
+            fi
+
+            INSTALLED=$((INSTALLED + 1))
+
+            if [ -f "${installed_dir}/SKILL.md" ] && [ -f "${skill_dir}/SKILL.md" ]; then
+                installed_sum=$(skill_checksum "${installed_dir}/SKILL.md")
+                source_sum=$(skill_checksum "${skill_dir}/SKILL.md")
+                if [ "$installed_sum" != "$source_sum" ]; then
+                    echo "  DRIFT:   $skill_name"
+                    DRIFTED=$((DRIFTED + 1))
+                else
+                    echo "  OK:      $skill_name"
+                fi
+            fi
+        done
+
+        # Check for skills installed but not in our repo (from other repos)
+        if [ -d "$target" ]; then
+            for installed_dir in "$target"/synthesis-*; do
+                [ -d "$installed_dir" ] || continue
+                skill_name=$(basename "$installed_dir")
+                if [ ! -d "${CACHE_DIR}/${skill_name}" ]; then
+                    if [ -f "${installed_dir}/.source.json" ]; then
+                        other_repo=$(grep '"source_repo"' "${installed_dir}/.source.json" 2>/dev/null | sed 's/.*: *"//;s/".*//' || echo "unknown")
+                        echo "  OTHER:   $skill_name (from $other_repo)"
+                    else
+                        echo "  OTHER:   $skill_name (no provenance)"
+                    fi
+                    ORPHANED=$((ORPHANED + 1))
+                fi
+            done
+        fi
+
+        echo ""
+        echo "  $INSTALLED installed, $DRIFTED drifted, $ORPHANED from other repos"
+        echo ""
+    done
 }
 
 do_uninstall() {
@@ -123,14 +264,16 @@ do_uninstall() {
 COMMAND="${1:-install}"
 
 case "$COMMAND" in
-    install)  do_install ;;
-    update)   do_update ;;
+    install)   do_install ;;
+    update)    do_update ;;
+    status)    do_status ;;
     uninstall) do_uninstall ;;
     *)
-        echo "Usage: $0 {install|update|uninstall}"
+        echo "Usage: $0 {install|update|status|uninstall}"
         echo ""
-        echo "  install    Install all Synthesis Skills"
+        echo "  install    Install all Synthesis Skills (writes .source.json provenance)"
         echo "  update     Update to latest version"
+        echo "  status     Show installed skills, drift detection, cross-repo inventory"
         echo "  uninstall  Remove all installed skills"
         exit 1
         ;;
