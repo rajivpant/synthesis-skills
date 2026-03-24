@@ -149,7 +149,7 @@ Evaluate against the project's quality gates. Produce written feedback covering:
 
 Cherry-picking is the most common integration mechanism, but it carries a hidden risk: files from a contributor's old branch may silently overwrite work from prior synthesis merges. The cherry-pick succeeds without conflicts because the contributor's version is "newer" in git's view, but it reverts improvements that were made after the contributor branched.
 
-**If your project has a `synthesis-merge-verification` skill, run it after every cherry-pick.** It provides a complete 5-step protocol covering file overlap detection, prior feature survival, orphaned component checks, test cascades, and content replacement verification.
+**If your project has a dedicated merge verification skill, run it after every cherry-pick.** A good verification protocol covers file overlap detection, prior feature survival, orphaned component checks, test cascades, and content replacement verification.
 
 **If no dedicated verification skill is available, check manually:**
 
