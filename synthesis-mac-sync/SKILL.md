@@ -97,11 +97,69 @@ Performs all three operations:
 
 ---
 
+## Performance — Minimize Tool Calls
+
+**CRITICAL:** Mac-sync must run with minimal interactive tool calls. The user should NOT face dozens of approval prompts.
+
+### Config file sync — ONE bash call
+
+Write a single bash script that loops through ALL files in the manifest, compares them with `diff`, checks timestamps with `stat -f %m` if different, copies the newer version, and applies `chmod 600` to sensitive files. Execute this entire script in ONE `Bash` tool call. Do NOT run separate `diff`, `stat`, or `cp` commands for each file.
+
+Example pattern:
+```bash
+ICLOUD_BASE="$HOME/Library/Mobile Documents/com~apple~CloudDocs/workspaces/rajiv/credentials/mac-sync"
+
+sync_file() {
+  local icloud="$1" local_path="$2" sensitive="$3"
+  if [ ! -f "$icloud" ] && [ ! -f "$local_path" ]; then echo "SKIP (neither exists): $local_path"; return; fi
+  if [ ! -f "$icloud" ]; then echo "COPY local→iCloud: $local_path"; cp "$local_path" "$icloud"; return; fi
+  if [ ! -f "$local_path" ]; then echo "COPY iCloud→local: $local_path"; mkdir -p "$(dirname "$local_path")"; cp "$icloud" "$local_path"; [ "$sensitive" = "yes" ] && chmod 600 "$local_path"; return; fi
+  if diff -q "$icloud" "$local_path" > /dev/null 2>&1; then echo "IDENTICAL: $local_path"; return; fi
+  local icloud_ts=$(stat -f %m "$icloud") local_ts=$(stat -f %m "$local_path")
+  if [ "$icloud_ts" -gt "$local_ts" ]; then echo "SYNC iCloud→local (newer): $local_path"; cp "$icloud" "$local_path"; [ "$sensitive" = "yes" ] && chmod 600 "$local_path"
+  else echo "SYNC local→iCloud (newer): $local_path"; cp "$local_path" "$icloud"; fi
+}
+
+sync_file "$ICLOUD_BASE/.claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md" "no"
+# ... one line per manifest entry ...
+```
+
+### Git repo sync — TWO to THREE bash calls maximum
+
+1. **Discovery + fetch all** (ONE call): `find` repos, then loop through all of them running `git fetch origin` in a single script.
+2. **Status + auto-actions** (ONE call): Loop through all repos checking branch, ahead/behind, uncommitted changes, stashes. In the SAME script, automatically `git pull` repos that are behind and `git push` repos that are ahead with clean working trees. Collect all output into a structured summary.
+3. **Follow-up actions** (ONE call, only if needed): Handle any repos that need individual attention (diverged, conflicts).
+
+Example pattern for step 2:
+```bash
+REPOS=(
+  "/path/to/repo1"
+  "/path/to/repo2"
+  # ...
+)
+for repo in "${REPOS[@]}"; do
+  name=$(basename "$repo")
+  branch=$(git -C "$repo" branch --show-current 2>/dev/null)
+  if [ -z "$branch" ]; then echo "DETACHED: $name"; continue; fi
+  counts=$(git -C "$repo" rev-list --left-right --count "origin/$branch...$branch" 2>/dev/null)
+  behind=$(echo "$counts" | awk '{print $1}')
+  ahead=$(echo "$counts" | awk '{print $2}')
+  dirty=$(git -C "$repo" status --porcelain 2>/dev/null | head -5)
+  if [ "$behind" -gt 0 ]; then git -C "$repo" pull origin "$branch" 2>&1 | sed "s/^/PULLED $name: /"; fi
+  if [ "$ahead" -gt 0 ] && [ -z "$dirty" ]; then git -C "$repo" push origin "$branch" 2>&1 | sed "s/^/PUSHED $name: /"; fi
+  [ -n "$dirty" ] && echo "DIRTY $name: $(echo "$dirty" | wc -l | tr -d ' ') files"
+done
+```
+
+**Do NOT run individual tool calls per repo.** The whole point of mac-sync is automation without interaction.
+
+---
+
 ## Config File Sync Protocol
 
 ### Bidirectional Sync (default)
 
-For each file in the sync manifest:
+For each file in the sync manifest (executed as a SINGLE batched script per the Performance section above):
 
 1. Compare iCloud version with local version using `diff`
 2. **If identical** → skip silently
@@ -154,27 +212,17 @@ Maintain a **manifest file** (`git-repos.yaml`) that caches discovered repos for
 
 ### Per-Repo Sync Procedure
 
-**Step 1: Fetch (always do this first)**
-```bash
-git -C "$repo_path" fetch origin
-```
+**IMPORTANT:** All steps below must be executed as batched shell scripts, NOT individual tool calls per repo. See the **Performance — Minimize Tool Calls** section above.
 
-**Step 2: Check status**
-```bash
-branch=$(git -C "$repo_path" branch --show-current)
-git -C "$repo_path" rev-list --left-right --count "origin/$branch...$branch"
-```
+**Step 1: Fetch all** — loop through every discovered repo and `git fetch origin` in a single script.
 
-**Step 3: Pull if behind** — automatic, no prompt needed
-```bash
-git -C "$repo_path" pull origin "$branch"
-```
+**Step 2: Status + auto-actions** — in a single script, loop through all repos:
+- Get current branch, ahead/behind counts, uncommitted changes, stashes
+- Pull if behind (automatic)
+- Push if ahead and clean working tree (check push policy first — `pr-required` repos are reported, not pushed)
+- If push fails (non-fast-forward), report but do not force push
 
-**Step 4: Push if ahead** (clean working tree) — check push policy first:
-- **Default:** Push directly. If push fails (non-fast-forward), report but do not force push.
-- **`pr-required`:** Do NOT push. Report unpushed commits in summary.
-
-**Step 5: Report repos with uncommitted changes** — list in summary, do NOT auto-commit.
+**Step 3: Report repos with uncommitted changes** — list in summary, do NOT auto-commit.
 
 ### Safety Rules
 
