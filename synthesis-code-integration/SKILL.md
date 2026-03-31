@@ -5,7 +5,7 @@ license: "CC0-1.0"
 depends_on: []
 metadata:
   author: "Rajiv Pant"
-  version: "1.0.0"
+  version: "1.1.0"
   source_repo: "github.com/rajivpant/synthesis-skills"
   source_type: "public"
 ---
@@ -420,6 +420,85 @@ Add this checklist to the project's contributor guide. Make it a formal gate, no
 
 ---
 
+## Pre-Squash PR Manifest Check (MANDATORY)
+
+Before squash-merging an integration branch to `main`, verify that every PR on the branch is represented in the squash diff. This catches the most dangerous synthesis merge failure: a PR that was on the integration branch but accidentally excluded from the squash.
+
+### Why This Exists
+
+On 2026-03-31, two PRs (#85 and #78) were on an integration branch pushed to `develop` (staging). Users saw the features working on staging. But when the integration branch was squash-merged to `main`, these PRs were excluded. The squash commit only contained 6 of the 8 PRs' work. No test failed. No error was raised. The features simply vanished from `main`, and when the next version was built from `main`, they were gone.
+
+The changelog was then written to describe these features as shipped — because the agent relied on conversation context ("we merged these PRs") rather than verifying against the actual squash commit.
+
+### The Check
+
+Before running `git merge --squash`:
+
+```bash
+# 1. List all unique PRs/features on the integration branch
+git log integration/vX.Y.Z ^main --oneline
+
+# 2. After squash-merging (before committing), verify the diff includes
+#    changes from EVERY PR listed above
+git diff --cached --stat
+
+# 3. Cross-reference: for each PR, at least one file it touched must
+#    appear in the staged diff. If a PR's files are missing, the squash
+#    excluded it.
+```
+
+**If any PR is missing from the squash diff:** Do NOT commit. Investigate why it was excluded. Re-do the squash merge including the missing work.
+
+### Changelog Verification
+
+**Never write a changelog entry for a feature without verifying it exists in the code on the target branch.**
+
+```bash
+# Before writing "Feature X is in v0.82.0":
+git grep "FeatureXComponent\|featureXFunction" main -- frontend/src/
+# If zero results → the feature is NOT on main. Do NOT add a changelog entry.
+```
+
+The changelog describes the codebase as it IS, not as you believe it to be. Conversation context, Slack transcripts, and integration branch state are NOT valid sources for changelog claims. The code is.
+
+---
+
+## Critical Config Regression Guards
+
+When a configuration value is deliberately upgraded (e.g., thinking effort from "high" to "max", or token budgets from 16K to 24K), add a test that asserts the new value and will fail if it's reverted.
+
+### Why This Exists
+
+Cherry-picks from older branches carry the old config values. A merge conflict in a config file can resolve to the older value. A contributor who copies a config pattern from their older branch silently downgrades the value. None of these trigger test failures because the old value is "valid" — it just produces worse results.
+
+### The Pattern
+
+```python
+def test_thinking_effort_is_max(self):
+    """Content generation MUST use max thinking effort.
+
+    Downgrading to 'high' causes thinking-phase exhaustion on complex
+    articles. See incident 2026-03-30.
+    """
+    assert THINKING_CONFIG["content"]["output_config"]["effort"] == "max", (
+        "CRITICAL: Content thinking effort was downgraded from 'max'. "
+        "If intentional, update this test with justification."
+    )
+```
+
+### When to Add Config Guards
+
+Add a guard test whenever you:
+- Upgrade a thinking/reasoning effort level
+- Raise token budgets or context limits
+- Change a model selection (e.g., from Sonnet to Opus for a task)
+- Enable a feature flag that affects output quality
+- Change a retry count, timeout, or resilience parameter
+
+The test comment must explain WHY the value matters, not just WHAT it is. A future developer encountering a failing guard test needs to understand the consequences of the old value before deciding to change it.
+
+---
+
 ## Lessons and Anti-Patterns
 
 ### Anti-Pattern: The Blind Merge
@@ -445,3 +524,21 @@ It should grow with every integration.
 
 ### Lesson: Review the Branches, Not Just the PRs
 Contributors may have branches beyond what is in the PRs. Fetch all remote branches and understand the full scope.
+
+### Anti-Pattern: Squash Merge Without PR Manifest Check
+Squash-merging an integration branch without verifying that every PR on the branch is represented in the squash diff. **Prevention:** Run the pre-squash PR manifest check before committing.
+
+### Anti-Pattern: Changelog from Conversation Context
+Writing changelog entries based on what you discussed or planned rather than what's actually in the code. **Prevention:** Verify every changelog entry with `git grep` or file read against the target branch.
+
+### Anti-Pattern: "Worked on Staging" = "Merged to Main"
+Assuming a feature is in `main` because it was visible on staging. Staging (`develop`) can contain integration branch work that was never squash-merged to `main`. **Prevention:** Verify features against `main`, not `develop`.
+
+### Anti-Pattern: Unguarded Config Upgrades
+Upgrading a critical config value (thinking effort, token budgets, model selection) without adding a test that asserts the new value. **Prevention:** Every deliberate config upgrade gets a guard test.
+
+### Lesson: Squash Merges Are Inherently Lossy
+A squash merge combines N commits into 1. If any commit is excluded, there's no trace in the git history. The defense is the pre-squash manifest check — without it, you're relying on memory to track what was included.
+
+### Lesson: The Integration Branch Is Not Main
+Features exist on `main` only after the squash merge commit. The integration branch is a workspace, not a release. Changelogs, release notes, and "what's shipped" claims must be verified against `main`.
