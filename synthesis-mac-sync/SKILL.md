@@ -222,20 +222,22 @@ Maintain a **manifest file** (`git-repos.yaml`) that caches discovered repos for
 - Push if ahead and clean working tree (check push policy first — `pr-required` repos are reported, not pushed)
 - If push fails (non-fast-forward), report but do not force push
 
-**Step 3: Report repos with uncommitted changes** — list in summary, do NOT auto-commit.
+**Step 3: Handle repos with uncommitted changes** — show the user what's uncommitted (file list per repo) and ask whether to commit and push each dirty repo. Present a suggested commit message for each. Do NOT silently skip — uncommitted changes are unsynced state.
 
 ### Safety Rules
 
 1. **ALWAYS fetch first** — run `git fetch origin` before checking any status
 2. **NEVER force push** — always use regular `git push`
-3. **NEVER auto-commit** — never stage and commit uncommitted changes
-4. **Push automatically if ahead** — if working tree is clean and repo is ahead, push without asking
-5. **Pull automatically if behind** — pull new commits without asking
-6. **Skip repos with no remote** — report them but don't fail
-7. **Skip repos with conflicts** — report and let user resolve manually
-8. **Skip repos mid-rebase/merge** — report the state, don't interfere
-9. **One branch only** — only sync the current branch, don't switch branches
-10. **Prompt only for diverged repos** — when both ahead and behind, ask for merge strategy
+3. **NEVER silently auto-commit** — always show uncommitted files and ask before committing. Uncommitted changes are unsynced state; ignoring them defeats the purpose of the sync. Group files into separate commits by topic — never bundle unrelated files
+4. **NEVER bypass hooks without explicit permission** — if a pre-commit hook blocks a commit, STOP and ask the user. Never use `--no-verify` on your own. If the user approves bypassing for a specific commit, that approval does not extend to other commits
+5. **Sanitize ALL commit messages** — never include people's names, company names, project codenames, article titles, or meeting topics in commit messages. Use generic descriptions like "Add meeting transcript", "Update context", "Add new blog post". Git history is persistent and can leak confidential information
+6. **Push automatically if ahead** — if working tree is clean and repo is ahead, push without asking
+7. **Pull automatically if behind** — pull new commits without asking
+8. **Skip repos with no remote** — report them but don't fail
+9. **Skip repos with conflicts** — report and let user resolve manually
+10. **Skip repos mid-rebase/merge** — report the state, don't interfere
+11. **One branch only** — only sync the current branch, don't switch branches
+12. **Prompt only for diverged repos** — when both ahead and behind, ask for merge strategy
 
 ---
 
@@ -255,21 +257,21 @@ Mac-sync is designed to run fully automated. The assistant should complete the e
 - Manifest update → always refresh
 - One-time actions for a different machine → skip silently
 
+### Must prompt (show details + ask for action)
+
+1. **Repos with uncommitted changes** → show file list per repo, suggest commit message, ask whether to commit+push. Uncommitted local changes won't reach the other Mac — treating them as informational breaks the sync guarantee
+2. **Config file conflict** — both sides changed, can't determine winner from timestamps
+3. **Git repo diverged** — both ahead of AND behind remote
+4. **Git merge conflict during pull** — automatic merge failed
+5. **Repo in unexpected state** — mid-rebase, mid-merge, or detached HEAD
+6. **Auth failure across multiple repos** — stop and alert
+7. **Destructive action needed** — force push, hard reset, or branch deletion
+
 ### Report but take no action (never prompt)
 
-- Repos with uncommitted changes → list so user is aware
 - Repos with stashes → note in summary
 - Non-fast-forward push failures → report, move on
 - Repos with `push_policy: pr-required` → report unpushed commits
-
-### Must prompt (only these situations)
-
-1. **Config file conflict** — both sides changed, can't determine winner from timestamps
-2. **Git repo diverged** — both ahead of AND behind remote
-3. **Git merge conflict during pull** — automatic merge failed
-4. **Repo in unexpected state** — mid-rebase, mid-merge, or detached HEAD
-5. **Auth failure across multiple repos** — stop and alert
-6. **Destructive action needed** — force push, hard reset, or branch deletion
 
 ---
 
@@ -343,12 +345,12 @@ Present a summary after sync completes:
 - Synced X config files from iCloud/to iCloud
 
 ### Needs Attention (prompt user for these)
+- Repos with uncommitted changes: [file list per repo + suggested commit message] — ask whether to commit+push
 - Diverged repos: [list] — need merge strategy decision
 - Merge conflicts: [list] — need manual resolution
 - Repos in unexpected state: [list] — mid-rebase/merge/detached HEAD
 
 ### Informational (no action needed)
-- Repos with uncommitted changes: [list with file counts]
 - Repos with stashes: [list]
 - Push failures (non-fast-forward): [list]
 - Repos with no remote: [list]
