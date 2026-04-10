@@ -5,7 +5,7 @@ license: "CC0-1.0"
 metadata:
   depends_on: "synthesis-daily-rituals, synthesis-project-management"
   author: "Rajiv Pant"
-  version: "1.1.0"
+  version: "1.2.0"
   source_repo: "github.com/rajivpant/synthesis-skills"
   source_type: "public"
 ---
@@ -23,31 +23,41 @@ Create `.claude/slack-sync.yaml` in each project that uses this skill:
 ```yaml
 # .claude/slack-sync.yaml — Slack sync configuration
 #
+# workspace: (REQUIRED) Workspace identifier. Determines transcript subdirectory structure:
+#   {transcripts_path}/{workspace}/channels/YYYY-MM-DD.md
+#   {transcripts_path}/{workspace}/dms/YYYY-MM-DD.md
+#   {transcripts_path}/{workspace}/group-dms/YYYY-MM-DD.md
 # channels: Slack channels to monitor. All channel types supported.
-# dm_channels: Active DM conversations to check (optional).
-# transcripts_path: Where transcript files are saved (relative to ai-knowledge repo root).
+# dm_channels: Active 1:1 DM conversations to check (optional).
+# group_dm_channels: Group DM (mpim) conversations to check (optional).
+# transcripts_path: Root directory for transcripts (relative to ai-knowledge repo root).
 # action_plan_path: Where daily action plans live (relative to ai-knowledge repo root).
-# transcript_prefix: Filename prefix for transcript files (default: "slack-channels").
 # ai_knowledge_repo: Absolute path to the ai-knowledge repo where transcripts are stored.
 
-ai_knowledge_repo: ~/projects/my-projects/ai-knowledge/ai-knowledge-rajiv
+ai_knowledge_repo: ~/projects/ai-knowledge
+
+workspace: example-workspace
 
 transcripts_path: projects/_transcripts/
 action_plan_path: projects/_daily-plans/
-transcript_prefix: slack-channels
 
 channels:
-  - id: C0AGZCHGUAK
-    name: mmc-product-growth-squad
-    type: private_channel
-  - id: C0AKDAQN34G
-    name: tech-csa-pull-requests
+  - id: C0EXAMPLE01
+    name: team-general
+    type: public_channel
+  - id: C0EXAMPLE02
+    name: eng-pull-requests
     type: private_channel
   # Add more channels as needed
 
 dm_channels: []
-  # - id: U0AH9M2FYUQ
-  #   name: Emil Penalo
+  # - id: U0EXAMPLE01
+  #   name: Jane Doe
+  #   dm_id: D0EXAMPLE01
+
+group_dm_channels: []
+  # - id: C0EXAMPLE03
+  #   name: "Project Alpha team"
 ```
 
 If the config file is missing, the skill should warn and ask the user to create one.
@@ -57,7 +67,7 @@ If the config file is missing, the skill should warn and ask the user to create 
 ## Prerequisites
 
 - **Slack MCP must be connected and authenticated.** If any Slack tool call fails with an auth error, stop and instruct the user to re-authenticate: `claude mcp auth slack`, then restart the IDE/CLI.
-- **Local transcript file must exist or be created.** The skill creates today's file if it doesn't exist.
+- **Local transcript files must exist or be created.** The skill creates today's files as needed under `{workspace}/channels/`, `{workspace}/dms/`, and `{workspace}/group-dms/`.
 
 ---
 
@@ -79,13 +89,15 @@ Every sync — whether day-start, mid-day, or day-end — follows these steps. N
 
 ### Step 0: Run the thread checker (MANDATORY)
 
-Before doing anything else, run the thread checker script:
+Before doing anything else, run the thread checker script on each transcript file that exists for today:
 
 ```bash
-python3 ~/.claude/skills/synthesis-slack-sync/thread_checker.py <transcript_file> [action_plan_file]
+python3 ~/.claude/skills/synthesis-slack-sync/thread_checker.py {transcripts_path}/{workspace}/channels/YYYY-MM-DD.md [action_plan_file]
+python3 ~/.claude/skills/synthesis-slack-sync/thread_checker.py {transcripts_path}/{workspace}/dms/YYYY-MM-DD.md [action_plan_file]
+python3 ~/.claude/skills/synthesis-slack-sync/thread_checker.py {transcripts_path}/{workspace}/group-dms/YYYY-MM-DD.md [action_plan_file]
 ```
 
-This outputs every parent thread TS from the transcript and every unsent draft's target thread. You MUST re-read every thread it lists during Step 2. The script exists because manually deciding which threads to re-read has repeatedly failed — threads get skipped and messages get missed.
+Skip any file that does not yet exist (e.g., no DMs synced today). Combine the output from all runs into a single checklist. You MUST re-read every thread listed during Step 2. The script exists because manually deciding which threads to re-read has repeatedly failed — threads get skipped and messages get missed.
 
 ### Step 1: Read channels for new top-level messages
 
@@ -95,8 +107,8 @@ For each channel in the config:
 slack_read_channel(channel_id, oldest=LAST_SYNC_TIMESTAMP, limit=30)
 ```
 
-- On **first sync of the day** (no transcript file exists yet): omit `oldest` or use midnight timestamp.
-- On **subsequent syncs**: use the timestamp of the last sync recorded in the transcript file.
+- On **first sync of the day** (no channels transcript file exists yet): omit `oldest` or use midnight timestamp.
+- On **subsequent syncs**: use the timestamp of the last sync recorded in the channels transcript file.
 - Note the **reply count** on every message that has threads. These will be re-read in Step 2.
 
 ### Step 2: Re-read ALL active threads — today AND recent days
@@ -105,9 +117,9 @@ slack_read_channel(channel_id, oldest=LAST_SYNC_TIMESTAMP, limit=30)
 
 Thread replies do NOT appear as channel-level messages. The only way to detect them — including the user's own replies — is to re-read threads. This step must cover three sources of active threads:
 
-**Source A: Threads in today's transcript.** For every message in today's transcript that shows a thread (reply count > 0), re-read the full thread.
+**Source A: Threads in today's transcripts.** For every message in today's channels, DMs, and group-DMs transcript files that shows a thread (reply count > 0), re-read the full thread.
 
-**Source B: Threads from yesterday's transcript that may have new replies.** Open the previous day's transcript file. For every thread that was active (had replies), re-read it. This catches: overnight replies, the user's own replies to threads from yesterday, and continuing conversations that span days.
+**Source B: Threads from yesterday's transcripts that may have new replies.** Open the previous day's transcript files (`{workspace}/channels/`, `{workspace}/dms/`, `{workspace}/group-dms/` for yesterday's date). For every thread that was active (had replies), re-read it. This catches: overnight replies, the user's own replies to threads from yesterday, and continuing conversations that span days.
 
 **Source C: Threads surfaced by Step 1.** Any message returned by Step 1 that shows "Thread: N replies" must be re-read, even if the parent message is from a previous day. Channel reads return messages in reverse chronological order — a thread from 3 days ago can appear in the channel read if it had recent activity.
 
@@ -118,12 +130,12 @@ slack_read_thread(channel_id, message_ts=PARENT_TS)
 Rules:
 - **Never use the `oldest` parameter on thread reads.** It causes missed replies. Read the full thread every time.
 - **Compare the reply count and latest reply timestamp** against what's in the local transcript.
-- **If new replies exist**, append them to today's transcript (even if the parent message is from a previous day).
+- **If new replies exist**, append them to the appropriate transcript file for today (channels, DMs, or group-DMs), even if the parent message is from a previous day.
 - **If the user sent a message** in a thread, it does NOT appear as a new channel-level message. The only way to detect it is to re-read the thread. If this step is skipped, the action plan shows drafts as "unsent" when the user already sent them.
 
 **Mechanical check:** Before reporting "no new messages" for any sync, verify that:
-1. Every thread TS in today's transcript was re-read and reply counts match.
-2. Every active thread from yesterday's transcript was re-read for new replies.
+1. Every thread TS in today's transcripts was re-read and reply counts match.
+2. Every active thread from yesterday's transcripts was re-read for new replies.
 3. Every thread indicator from Step 1 channel reads was followed.
 
 **Why Source B matters:** On 2026-03-31, the user replied to an engineer's thread from the previous night. The reply didn't appear as a channel-level message. Because the thread was from the previous day and not in today's transcript, the sync missed it entirely — the daily plan showed the draft as unsent when the user had already sent it.
@@ -133,19 +145,37 @@ Rules:
 For each DM channel in the config:
 
 ```
-slack_read_channel(channel_id=USER_ID, oldest=LAST_SYNC_TIMESTAMP, limit=20)
+slack_read_channel(channel_id=DM_CHANNEL_ID, oldest=LAST_SYNC_TIMESTAMP, limit=20)
 ```
 
 Only check DMs that have active conversations. Don't read every DM — the config file specifies which ones are active.
+
+### Step 3b: Check Group DMs
+
+For each group DM channel in the config:
+
+```
+slack_read_channel(channel_id=GROUP_DM_ID, oldest=LAST_SYNC_TIMESTAMP, limit=20)
+```
+
+Group DMs (multi-party IMs) are separate from 1:1 DMs. They use channel IDs, not user IDs. Only check group DMs listed in the config.
 
 ### Step 4: Save to local transcripts
 
 **This step is not optional. Never skip it, even if "nothing changed."**
 
-- Append all new messages and thread replies to the local transcript file.
-- Record the sync time in the file (e.g., `## Mid-day sync (~14:30 EDT)`).
-- File naming convention: `{transcript_prefix}-YYYY-MM-DD.md` (e.g., `slack-channels-2026-03-25.md`).
-- If the file doesn't exist, create it with the standard header.
+Write each message type to its own transcript file under the workspace directory:
+
+- **Channels:** `{transcripts_path}/{workspace}/channels/YYYY-MM-DD.md` — channel messages and thread replies from Steps 1-2.
+- **DMs:** `{transcripts_path}/{workspace}/dms/YYYY-MM-DD.md` — 1:1 DM messages from Step 3.
+- **Group DMs:** `{transcripts_path}/{workspace}/group-dms/YYYY-MM-DD.md` — group DM messages from Step 3b.
+
+For each file:
+- Record the sync time (e.g., `## Mid-day sync (~14:30 EDT)`).
+- If the file doesn't exist, create it with the standard header and create directories as needed.
+- If no messages of that type were found, skip that file (do not create empty files).
+
+Meeting transcripts are NOT part of Slack sync — they are handled by the daily-rituals skill and placed in `{transcripts_path}/{workspace}/meetings/`.
 
 ### Step 5: Update action plan
 
@@ -201,8 +231,13 @@ Include the human-readable time the message was found in Slack.
 
 ## Transcript File Format
 
+Each transcript type has its own file under `{workspace}/`. The internal format is the same across all three — only the header differs.
+
+### Channels file (`{workspace}/channels/YYYY-MM-DD.md`)
+
 ```markdown
-# Slack Transcript — [Day], [Month] [Date], [Year]
+# Slack Channels — [Day], [Month] [Date], [Year]
+# Workspace: [workspace]
 
 Last synced: ~HH:MM TZ
 
@@ -229,10 +264,47 @@ Last synced: ~HH:MM TZ
 ---
 ```
 
+### DMs file (`{workspace}/dms/YYYY-MM-DD.md`)
+
+```markdown
+# Slack DMs — [Day], [Month] [Date], [Year]
+# Workspace: [workspace]
+
+Last synced: ~HH:MM TZ
+
+---
+
+## DM with [Person Name] (DM_CHANNEL_ID)
+
+### [Author Name] — HH:MM TZ (TS: [unix_timestamp])
+[Message content]
+
+---
+```
+
+### Group DMs file (`{workspace}/group-dms/YYYY-MM-DD.md`)
+
+```markdown
+# Slack Group DMs — [Day], [Month] [Date], [Year]
+# Workspace: [workspace]
+
+Last synced: ~HH:MM TZ
+
+---
+
+## Group DM: [Group Name or Members] (GROUP_DM_ID)
+
+### [Author Name] — HH:MM TZ (TS: [unix_timestamp])
+[Message content]
+
+---
+```
+
 Key rules:
 - **Always record the TS (Unix timestamp)** for every significant message. TSs are the key to re-reading threads later.
 - **Note reply counts** so the next sync can detect new replies.
 - **Separate sync sessions** with a horizontal rule and a timestamp header.
+- **Each file type only contains its own message type.** Channels file has no DMs; DMs file has no channel messages.
 
 ---
 
