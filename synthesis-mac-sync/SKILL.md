@@ -5,7 +5,7 @@ license: "CC0-1.0"
 depends_on: []
 metadata:
   author: "Rajiv Pant"
-  version: "1.0.0"
+  version: "1.1.0"
   source_repo: "github.com/rajivpant/synthesis-skills"
   source_type: "public"
 ---
@@ -208,7 +208,7 @@ Scan a configured directory (e.g., `~/workspaces/`) recursively:
 find ~/workspaces -maxdepth 3 -name ".git" -type d 2>/dev/null
 ```
 
-Maintain a **manifest file** (`git-repos.yaml`) that caches discovered repos for quick status checks. Refresh on each sync.
+Maintain a **manifest file** (`git-repos.yaml`) that caches discovered repos, their categories, and their remote configurations for quick status checks and cross-machine remote sync. Refresh on each sync — this includes re-capturing all remotes per repo (see **Git Remote Sync Protocol**).
 
 ### Per-Repo Sync Procedure
 
@@ -238,6 +238,52 @@ Maintain a **manifest file** (`git-repos.yaml`) that caches discovered repos for
 10. **Skip repos mid-rebase/merge** — report the state, don't interfere
 11. **One branch only** — only sync the current branch, don't switch branches
 12. **Prompt only for diverged repos** — when both ahead and behind, ask for merge strategy
+
+---
+
+## Git Remote Sync Protocol
+
+Remote configurations (name + URL pairs) are per-machine state stored in each repo's `.git/config`. Without explicit sync, a remote added on one Mac won't exist on the other.
+
+### Capture (during scan/refresh)
+
+When refreshing `git-repos.yaml`, capture all remotes per repo:
+
+```bash
+# For each discovered repo:
+git -C "$repo_path" remote -v | grep '(fetch)' | awk '{print $1, $2}'
+```
+
+Write the results into the `remotes:` field of each repo entry in `git-repos.yaml`. This runs as part of the single batched scan script — not as separate tool calls.
+
+### Reconcile (during pull/sync)
+
+When syncing to a Mac, reconcile local remotes against the manifest:
+
+```bash
+# For each repo in git-repos.yaml, for each remote in the manifest:
+existing_url=$(git -C "$repo_path" remote get-url "$remote_name" 2>/dev/null)
+if [ -z "$existing_url" ]; then
+  git -C "$repo_path" remote add "$remote_name" "$manifest_url"
+  echo "ADDED $repo_name: $remote_name → $manifest_url"
+elif [ "$existing_url" != "$manifest_url" ]; then
+  git -C "$repo_path" remote set-url "$remote_name" "$manifest_url"
+  echo "UPDATED $repo_name: $remote_name → $manifest_url (was: $existing_url)"
+fi
+```
+
+Execute this as a SINGLE batched script across all repos — not individual tool calls.
+
+### Safety Rules
+
+1. **Never auto-remove remotes** — if a local remote exists but isn't in the manifest, flag it in the summary but do not delete. The manifest captures the last scan from one machine; the local remote may be intentionally machine-specific.
+2. **Never overwrite origin with empty** — if the manifest has no `remotes:` field for a repo, skip reconciliation for that repo.
+3. **Report all changes** — every add/update goes in the sync summary.
+4. **Credentials in URLs are expected** — some remotes include usernames (e.g., `user@bitbucket.org`). These are not secrets (the password is in the credential helper, not the URL). Do not strip or redact them.
+
+### Relationship to setup-git-remotes.sh
+
+If you maintain a `setup-git-remotes.sh` bootstrap script, it serves as a fallback for initial machine setup (before repos are cloned and before the first mac-sync). Once `git-repos.yaml` captures remotes, the yaml is the authoritative source of truth. Keep the bootstrap script consistent with the yaml, or auto-generate it from the yaml during push.
 
 ---
 
@@ -388,20 +434,26 @@ Your config file (README.md in the sync folder) should include these sections. A
 ```yaml
 scan_root: ~/workspaces
 max_depth: 3
+total_repos: 12
 
 repositories:
   - path: ~/workspaces/personal/my-app
-    remote: https://github.com/user/my-app.git
     category: personal
+    remotes:
+      origin: https://github.com/user/my-app.git
 
   - path: ~/workspaces/work/app
-    remote: https://github.com/org/app.git
     category: work
     push_policy: pr-required
+    remotes:
+      origin: https://github.com/org/app.git
+      mirror: https://github.com/other-org/app.git
 
 excluded:
   # - ~/workspaces/personal/some-fork  # Reason: upstream only
 ```
+
+The `remotes` field captures all configured git remotes per repo. This is the source of truth for remote topology across machines — when mac-sync runs on a second Mac, it reconciles local remotes against this manifest. See **Git Remote Sync Protocol** below.
 
 ### Machine Inventory
 
