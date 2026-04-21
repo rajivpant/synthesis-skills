@@ -101,3 +101,7 @@ For common names or ambiguous entities, confirm the context matches before provi
 ### Personal Research
 - People: authors, researchers, or experts in a field of interest
 - Organizations: universities, research centers, journals, or industry associations
+
+## Related
+
+Part of the [synthesis writing](https://synthesiswriting.org) craft — the writer writes, the AI assists.

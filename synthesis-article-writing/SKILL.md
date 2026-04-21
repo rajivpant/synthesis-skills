@@ -318,3 +318,7 @@ After the draft is complete, review it critically through these lenses before pu
 
 - Pay special attention to: hyperbolic subheadings, borrowed canonical examples (jet engine/market, bus route nobody rides), dramatic fragment construction, section-ending summaries.
 - Check that pull quotes exist and are placed for visual rhythm across the article's length.
+
+## Related
+
+Part of the [synthesis writing](https://synthesiswriting.org) craft — the writer writes, the AI assists.

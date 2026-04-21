@@ -122,3 +122,7 @@ Avoid these patterns:
 - Adapt tone and style to the content type
 - Suggest improvements without being prescriptive
 - Acknowledge and reinforce good writing when you see it
+
+## Related
+
+Part of the [synthesis writing](https://synthesiswriting.org) craft — the writer writes, the AI assists.

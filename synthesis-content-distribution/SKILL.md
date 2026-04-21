@@ -303,3 +303,7 @@ When asked to write social media posts about an event, experience, location, or 
 - Tag people or organizations only if genuinely relevant to the post
 
 **Tone across all platforms:** Authentic, specific, grounded in real experience. Avoid generic "what an amazing event" language. Share what you actually observed, learned, or found useful.
+
+## Related
+
+Part of the [synthesis writing](https://synthesiswriting.org) craft — the writer writes, the AI assists.

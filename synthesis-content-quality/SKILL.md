@@ -1,12 +1,11 @@
 ---
 name: synthesis-content-quality
 description: >
-  A 36-point quality framework for evaluating and improving AI-assisted content.
+  A systematic quality framework for evaluating and improving AI-assisted content.
   Covers AI slop detection, saturated vocabulary, exhausted metaphors, sycophantic
   tone, hyperbolic patterns, scenario fingerprinting, and operational confidentiality
   exposure. Use for content quality, AI content, quality check, writing quality,
-  editorial review, content review, AI slop detection, content improvement, and
-  publishing standards.
+  editorial review, content review, content improvement, and publishing standards.
 license: CC0-1.0
 depends_on: ["synthesis-fact-checking"]
 metadata:
@@ -252,3 +251,7 @@ Before publishing AI-assisted content:
 5. Have I added genuine value beyond what AI provided?
 
 If you cannot answer yes to most of these, revise further.
+
+## Related
+
+Part of the [synthesis writing](https://synthesiswriting.org) craft — the writer writes, the AI assists.

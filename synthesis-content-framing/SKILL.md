@@ -446,3 +446,7 @@ When appropriate, include the public domain release for terminology and concepts
 or:
 
 > These terms -- synthesis engineering for the discipline, synthesis coding for the craft -- are offered to the community without restriction. They're released under CC0 1.0 Universal (public domain) for anyone to use, modify, or build upon.
+
+## Related
+
+Part of the [synthesis writing](https://synthesiswriting.org) craft — the writer writes, the AI assists.

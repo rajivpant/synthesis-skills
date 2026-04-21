@@ -1,10 +1,11 @@
 ---
-name: synthesis-blog-refresh
+name: synthesis-article-refresh
 description: >
-  Revitalize and enhance old blog posts while maintaining temporal integrity and authentic voice.
-  The enhanced version should read as if written with perfect clarity on the original publication date.
-  Use when asked to: revitalize blog, update old post, refresh article, blog enhancement, improve blog post,
-  enhance old content, revitalize article, update historical post.
+  Refresh and revitalize older articles with improved clarity, presentation, and completeness
+  while preserving the author's voice, argument, and period-appropriate context. Standard
+  editorial practice for keeping a published archive polished and accessible. Use when asked
+  to: refresh article, revitalize article, update older article, polish published post,
+  enhance older content.
 license: "CC0-1.0"
 depends_on: []
 metadata:
@@ -14,7 +15,7 @@ metadata:
   source_type: "public"
 ---
 
-# Blog Refresh
+# Article Refresh
 
 Revitalize a blog post into its optimal version — what it could have been with perfect clarity, complete information available at the time, and ideal execution — while maintaining absolute temporal authenticity.
 
@@ -195,3 +196,8 @@ The revitalized post must:
 - Feel like natural, organic writing, not an artificial enhancement
 - Include all valuable hyperlinks from the original (unless deliberately removed)
 - Create a lasting resource that remains valuable beyond its publication date
+
+
+## Related
+
+Part of the [synthesis writing](https://synthesiswriting.org) craft — the writer writes, the AI assists.

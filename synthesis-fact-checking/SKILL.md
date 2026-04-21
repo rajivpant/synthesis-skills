@@ -376,3 +376,7 @@ Is the claim verifiable?
             +-- Yes -> Find an alternative source for the same point, or hedge explicitly.
             +-- No -> Remove the claim.
 ```
+
+## Related
+
+Part of the [synthesis writing](https://synthesiswriting.org) craft — the writer writes, the AI assists.

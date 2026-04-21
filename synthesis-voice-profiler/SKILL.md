@@ -170,3 +170,7 @@ No configuration or wiring is needed. The CLAUDE.md convention is the integratio
 - When adding a new content type to your workflow (e.g., you start writing for a different platform)
 - Periodically (every 6-12 months) to ensure the profile still matches your current voice
 - After receiving feedback that your AI-assisted writing doesn't sound like you
+
+## Related
+
+Part of the [synthesis writing](https://synthesiswriting.org) craft — the writer writes, the AI assists.

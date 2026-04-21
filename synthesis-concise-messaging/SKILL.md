@@ -175,3 +175,7 @@ Include in your configuration:
 - Relationship context for frequent recipients
 
 The framework provides structure. Your voice profile makes the output authentically yours.
+
+## Related
+
+Part of the [synthesis writing](https://synthesiswriting.org) craft — the writer writes, the AI assists.

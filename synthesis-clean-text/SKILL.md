@@ -36,3 +36,7 @@ These requirements exist for legitimate and important reasons:
 ## Application
 
 Apply these requirements to all text generation output. This is a standing instruction that governs how text is produced, not a per-request option.
+
+## Related
+
+Part of the [synthesis writing](https://synthesiswriting.org) craft — the writer writes, the AI assists.

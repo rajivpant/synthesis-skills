@@ -120,6 +120,10 @@ Skills use progressive disclosure:
 
 When you ask your AI assistant to do something that matches a skill's description, it loads automatically. Skills that involve writing include defaults that work standalone — if you have personal preferences in your CLAUDE.md, those override the defaults.
 
+## Related
+
+Many of these skills are practical artifacts of [synthesis writing](https://synthesiswriting.org) — the craft where the writer writes and the AI assists with scaffolding. Not a product but a discipline for human authorship in the age of AI.
+
 ## Licensing
 
 - **[CC0 1.0](LICENSE-CC0)** — methodology and content skills (no attribution required)

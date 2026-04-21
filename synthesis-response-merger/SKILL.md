@@ -51,3 +51,7 @@ Follow the plan and produce the unified output.
 
 1. **Plan** -- the integration plan (brief, for transparency)
 2. **Unified document** -- the comprehensive merged result
+
+## Related
+
+Part of the [synthesis writing](https://synthesiswriting.org) craft — the writer writes, the AI assists.
