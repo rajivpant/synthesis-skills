@@ -104,5 +104,5 @@ Initial release: 22 public Agent Skills. Superseded by v2.0.0 on the same day.
 ### Installation
 
 ```bash
-npx skills add rajivpant/synthesis-skills --global --all --copy
+npx skills add synthesisengineering/synthesis-skills --global --all --copy
 ```
