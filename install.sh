@@ -159,13 +159,39 @@ do_install() {
 # Read depends_on from a SKILL.md frontmatter. Outputs one dependency name per line.
 parse_depends_on() {
     skill_md="$1"
-    # Extract the depends_on line, strip YAML array syntax, output one name per line
-    dep_line=$(grep '^depends_on:' "$skill_md" 2>/dev/null || true)
-    if [ -z "$dep_line" ]; then
-        return
-    fi
-    # Remove 'depends_on:', brackets, quotes, spaces — split on commas
-    echo "$dep_line" | sed 's/^depends_on: *//; s/\[//; s/\]//; s/"//g; s/ //g' | tr ',' '\n' | grep -v '^$' || true
+    awk '
+        /^---$/ {
+            frontmatter_count++
+            if (frontmatter_count == 2) exit
+            next
+        }
+        frontmatter_count == 1 {
+            if ($0 ~ /^depends_on:[[:space:]]*\[/) {
+                line = $0
+                sub(/^depends_on:[[:space:]]*/, "", line)
+                gsub(/[\[\]"[:space:]]/, "", line)
+                count = split(line, deps, ",")
+                for (i = 1; i <= count; i++) {
+                    if (deps[i] != "") print deps[i]
+                }
+                exit
+            }
+            if ($0 ~ /^depends_on:[[:space:]]*$/) {
+                in_depends = 1
+                next
+            }
+            if (in_depends) {
+                if ($0 ~ /^[[:space:]]*-/) {
+                    line = $0
+                    sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+                    gsub(/["[:space:]]/, "", line)
+                    if (line != "") print line
+                    next
+                }
+                if ($0 !~ /^[[:space:]]/) exit
+            }
+        }
+    ' "$skill_md"
 }
 
 # Read source_type from an installed skill's .source.json
