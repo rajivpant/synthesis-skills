@@ -9,7 +9,7 @@ depends_on:
   - synthesis-repo-guard
 metadata:
   author: "Rajiv Pant"
-  version: "2.3.0"
+  version: "2.4.0"
   source_repo: "github.com/synthesisengineering/synthesis-skills"
   source_type: "public"
 ---
@@ -17,6 +17,24 @@ metadata:
 # Daily Rituals — Global Checklists
 
 Standard day-start and day-end rituals for synthesis engineering projects. These are the global (per-person) checklists. Each project may have a project-specific supplement that extends these with channel-specific sync, repo-specific checks, and stakeholder-specific communications.
+
+## v2.4.0 — Canonical Plan Format Contract
+
+In v2.4.0 (2026-04-29), the daily plan file format became a versioned contract between this skill (the producer) and synthesis-console v0.8+ (the consumer that renders plans as a cockpit dashboard).
+
+The contract is defined by the **canonical H2 vocabulary** below. The console's parser is tolerant of synonyms and emoji prefixes, but agentic skills (LLMs) must prefer the canonical names where possible because:
+
+- Canonical names are unambiguously typed by the console (NEEDS YOU / TODAY / DRAFTS / lower-row collapsibles)
+- Synonyms are accepted via substring + case-insensitive match, but each new variant adds parser maintenance burden
+- Non-canonical names fall through to "other" and render as plain markdown — visible but not specially typed
+
+When the LLM driving this skill decides to deviate from the template, it MUST stay within the recognized vocabulary table (next section). New section types should be proposed as additions to this contract, not invented ad-hoc.
+
+The **producer-consumer contract** is documented in two places:
+- This file's "Canonical Plan Format" section below (authoritative for skill writers).
+- `synthesis-console/docs/cockpit-design.md` (authoritative for parser implementers).
+
+These two files must stay in sync. When changing one, update the other in the same commit.
 
 ## v2.3.0 — Workspace-Rooted Paths
 
@@ -267,9 +285,9 @@ The daily action plan is both a **live dashboard** (scannable current state) and
 
 **Reorganize freely.** Consolidate scattered sections, merge duplicate lists, reorder for readability. The file should have ONE section for each concern, not multiple sections that accumulated through the day. After every sync or major update, the file should read cleanly from top to bottom.
 
-### Required File Structure
+### Required File Structure (v2.4.0+)
 
-The daily plan should always follow this canonical structure. On each update, consolidate into these sections rather than appending new ones:
+The daily plan follows this canonical structure. On each update, consolidate into these sections rather than appending new ones. The synthesis-console v0.8+ cockpit parses these section names to typed regions; staying within the canonical vocabulary maximizes the typed UI surface.
 
 ```markdown
 # Daily Action Plan — [Day], [Date]
@@ -278,38 +296,93 @@ The daily plan should always follow this canonical structure. On each update, co
 
 ---
 
-## Completed Today
-[Single consolidated list of everything done, in chronological order]
+## Decisions needed from Rajiv     ← cockpit: NEEDS YOU region
+[H3 question per decision. Each H3 may have **Option A:** / **Option B:** lines
+ and a **Recommendation:** line. The cockpit renders option buttons that record
+ a `**Decided:** Option X — <ISO>` marker back to the file on click.]
 
-## Staging/Deployment Status
-[Current state of staging and production]
+## Priority Tasks                  ← cockpit: TODAY region
+### Do today — not negotiable      ← collapsible bucket (P0, expanded by default)
+1. **Task title** — description    ← cockpit renders as checkbox; click writes
+                                       `~~**Title**~~ ✅ **DONE HH:MM TZ**` in place
 
-## Sent Messages
-[ALL sent messages in one section, chronological, with timestamps and TSs]
+### Do today — should make it      ← P1 bucket (collapsed by default)
+### Do today — can slip            ← P2 bucket
+### Watch / waiting                ← muted styling
+### Stale targets                  ← muted styling
 
-## Unsent — Ready to Send
-[ONLY messages not yet sent. Remove from here and move to Sent when sent.]
+## Drafts — Ready to Send          ← cockpit: DRAFTS region
+> **Review before sending.** [Standard reviewer notice — keep verbatim.]
 
-## Scheduled for Later
-[Messages for tomorrow or future days]
+### Draft A — [Description]
+**Send to:** `#channel-name` — [thread locator]
+```
+[message body in fenced code block]
+```
+**Grounding:**
+- [bullet]
+- [bullet]
 
-## Standup Highlights
-[Standup summary — written once, not duplicated]
+## Standup Highlights              ← cockpit: lower-row collapsible (context tone)
+## What Happened Yesterday         ← cockpit: lower-row collapsible (briefing)
+## Things to Know                  ← cockpit: lower-row collapsible (briefing)
+## Mid-day Sync                    ← cockpit: lower-row collapsible (briefing)
+## Waiting On Others               ← cockpit: lower-row collapsible (waiting tone)
+## Open PR Queue                   ← cockpit: lower-row collapsible
+## Sent Messages                   ← cockpit: lower-row collapsible (done tone)
+## Completed Today                 ← cockpit: lower-row collapsible (done tone)
+## Sync state                      ← cockpit: lower-row collapsible
+## Bugs (Open)                     ← cockpit: lower-row collapsible (briefing)
+## Carried Items                   ← cockpit: lower-row collapsible (briefing)
+```
 
-## QA Findings
-[Consolidated QA results — updated in place, not appended]
+### Canonical Section Vocabulary (Authoritative)
 
-## Priority Tasks (Remaining)
-[Only uncompleted tasks. Completed tasks move to "Completed Today".]
+The synthesis-console v0.8+ parser classifies each H2 heading into one of these kinds. Use the canonical name where possible. The "synonyms" column lists variants the parser also recognizes via substring + case-insensitive match — these exist for backward compatibility but new plans should prefer the canonical name.
 
-## Carried Items
-[Items deferred to tomorrow or beyond]
+| Cockpit region / kind | Canonical H2 name | Recognized synonyms |
+|----------------------|-------------------|---------------------|
+| **decisions** (NEEDS YOU) | `Decisions needed` | "Decisions to make", "Open ask", "Asks for Rajiv", "Open Items", "Needs your attention", "Open Quality Concerns" |
+| **priority-tasks** (TODAY) | `Priority Tasks` | "Tasks", "Tasks for Rajiv", "Tasks Today", "Today's Tasks", "Today's Priorities", "Still To Do", "This Week", "Remaining Tasks", "Pending This Session", "Pending from Before Vacation" |
+| **drafts** (DRAFTS) | `Drafts — Ready to Send` | "Drafts", "Unsent — Ready to Send", "Unsent Drafts", "DM Reply Drafts", "Draft Messages", "Messages", "Next Steps", "Pending Emails", "Scheduled for Tomorrow / Later" |
+| **standup** | `Standup Highlights` | "Standup Transcript", any heading with "standup", "Newsroom Training" |
+| **sent-messages** | `Sent Messages` | "Messages Sent" |
+| **waiting** | `Waiting On Others` | "Waiting on", "Delegated to Team" |
+| **pr-queue** | `Open PR Queue` | "PR Queue", "Open PRs", "New PRs", "PRs Ready for Review", "PR Reviews Completed" |
+| **sync-state** | `Sync state` | "Staging/Deployment Status", "Deployment Status", "Pre-Migration Status", "Post-Release Status", "Files Created/Modified", "Test Results", "Staging:" |
+| **completed** | `Completed Today` | "Completed This Morning" |
+| **briefing** | `Things to Know` | "What Happened", "What Changed", "Big Things", "Things Rajiv Should Know", "Carried From / Items / Forward", "Carry Forward", "Mid-day Sync", "Morning Sync", "From Slack Sync", "State Catch-Up", "Day Summary", "End of Day Summary", "Bugs (Open)", "QA Findings", "QA Results", "CRITICAL:", "Context", "What to Watch", "Future Work", "Post-Release Issues", "Feature Requests (Carryover)", "Release Process Sync" |
+| **other** (fallback) | (any unrecognized H2) | Renders as plain markdown in the lower-row collapsibles. Nothing is lost; the section just isn't specially typed. |
 
-## Bugs (Open)
-[Single consolidated bug list — updated in place]
+### Internal Structure Conventions
 
-## Waiting On Others
-[Single table — updated in place]
+Within each section, the parser also recognizes structural patterns. Adhering to these makes the UI work correctly:
+
+**Decisions section** (`## Decisions needed`):
+- One H3 per decision (`### 1. Force-push origin/develop?`)
+- Options as bold paragraphs: `**Option A:** description`, `**Option B:** description`
+- Optional: `Recommendation: **A** with rationale`
+- After click: skill / human appends `**Decided:** Option X — <ISO>` directly under the H3
+- **Synthetic asks**: an H2 like `## Open ask for Rajiv` with prose body and NO H3s also surfaces in NEEDS YOU as a single card with the prose verbatim. Use this for one-off requests that don't fit the A/B/C structure.
+
+**Priority Tasks section** (`## Priority Tasks`):
+- One H3 per bucket (`### Do today — not negotiable`)
+- Tasks as numbered list items (`1. **Title** — description`) OR checkbox items (`- [ ] **Title** — description`). Both formats supported.
+- Already-done tasks may be marked any of these ways (parser detects all): `~~Title~~ ✅ DONE HH:MM`, `[x]`, leading `✅`, leading `DONE` or `SENT`.
+- The cockpit's TODAY region surfaces tasks as live checkboxes that write the canonical done marker back to the file on click.
+
+**Drafts section** (`## Drafts — Ready to Send`):
+- One H3 per draft (`### Draft A — Description`)
+- A `**Send to:** target — locator` paragraph identifying the recipient. `**Channel:**` is also accepted.
+- A fenced code block OR blockquote with the message body.
+- Optional: a `**Grounding:**` paragraph or bullet list with research backing.
+- After send: skill / cockpit appends `**Sent:** <ISO> (TS=...) <permalink>` directly under the body.
+- **Drafts may also appear under non-drafts H2s.** When a draft is added to a topical context (e.g., a draft DM written into "Things to Know" alongside the situation that prompted it), the cockpit's DRAFTS region aggregates it from wherever it lives in the document. The canonical placement is still under `## Drafts`, but topical inline drafts work too.
+
+**Pre-Send Review Notice**: every drafts H2 SHOULD include this verbatim blockquote before the first H3 draft (the cockpit doesn't currently re-display it in the DRAFTS region but it remains in the file for archival and Full-Markdown view):
+
+```
+> **Review before sending.** These drafts are grounded in real data — code commits, test results, deployment logs, Slack threads, and project context — but they are starting points, not final messages. Read each one, edit it in your own voice, and add the personal touch only you can. Human-to-human communication deserves human effort.
 ```
 
 ### What This Means in Practice
