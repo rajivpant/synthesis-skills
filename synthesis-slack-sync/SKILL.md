@@ -5,7 +5,7 @@ license: "CC0-1.0"
 metadata:
   depends_on: "synthesis-daily-rituals, synthesis-project-management"
   author: "Rajiv Pant"
-  version: "3.2.0"
+  version: "3.3.0"
   source_repo: "github.com/synthesisengineering/synthesis-skills"
   source_type: "public"
 ---
@@ -15,6 +15,40 @@ metadata:
 A protocol for syncing Slack channels and threads to local transcript files using Slack MCP. Designed for AI-assisted workflows where an agent reads Slack on behalf of a user, saves transcripts locally, and updates a daily action plan.
 
 This skill provides the **protocol** — the sync methodology, thread re-reading discipline, transcript format, and action plan update rules. A per-project **config file** provides the specifics: which channels, which paths, which DMs. Prefer `.agents/slack-sync.yaml`; existing `.claude/slack-sync.yaml` configs remain supported.
+
+## v3.3.0 — Two-Tier Draft Block: Templates Move into Files
+
+In v3.3.0 (2026-04-29), the draft block format gets restructured around a glanceable summary at the top and collapsed verification detail at the bottom. The templates also move out of this prose file and into dedicated files in `templates/`.
+
+The earlier shape (v3.2.0 and prior) put all metadata at uniform visual weight in the rendered output: title + Send-to + body + Grounding bullets all rendered inline as paragraphs and lists. That made the most frequent purpose of the daily plan — glanceable "what's next" reading — hostile, because the verification trail (Grounding) crowded the substance (the message body) at the same visual scale.
+
+v3.3.0 separates two tiers explicitly in the source:
+
+1. **Always-visible glance surface.** Brief H3 title (≤60 char target, ≤80 hard cap), compressed `**Send to:**` line, optional one-line context, the message body itself.
+2. **Click-to-expand detail.** Grounding wrapped in `<details>/<summary>` — markdown-it (and any CommonMark-compliant renderer) renders this as a native HTML collapsible. Closed by default, click to expand. The verification trail is one click away, not occupying glance-bar real estate.
+
+The brief-title rule is the same axis: keep H3 a scannable label, not a summary. Routing metadata, status markers, IDs, timestamps, commit hashes, compound clauses NEVER go in the title; they live in `**Send to:**`, the optional context paragraph, the body, the Grounding `<details>`, or the `**Sent:**` paragraph.
+
+### Templates in their own files
+
+The canonical formats now live as standalone artifacts:
+
+- [`templates/draft-block.md`](templates/draft-block.md) — active draft template (schema v1)
+- [`templates/sent-marker.md`](templates/sent-marker.md) — sent-state marker template (schema v1)
+
+The agent reads the template files literally when writing a draft into a daily plan. SKILL.md describes WHEN and WHY to use the template; the template files ARE the canonical structural form. This separation establishes a pattern the rest of the synthesis-skills ecosystem can adopt — `templates/<name>.md` as a sibling to `SKILL.md` for any skill whose protocol generates a structural artifact.
+
+Why split:
+
+- The template IS the producer-consumer contract artifact. Easier to diff template changes without scrolling through protocol prose.
+- Agents can read template files directly (cheap to load, no parse-the-protocol-prose-to-find-the-format).
+- Independent versioning: protocol stays at v3.x; template can ship its own schema version (`schema v1` in the file header).
+
+### Backward compatibility
+
+Pre-v3.3.0 draft sections (everything inline at uniform visual weight) continue to render correctly through the cockpit's existing parser — the parser doesn't require `<details>` blocks, just recognizes them when present. New drafts written by agents should follow the v3.3.0 templates. Agents rewriting an existing draft for any reason (mid-day update, edit before send, mark sent) should also rewrite the structure to the v3.3.0 form at that opportunity.
+
+This release follows the producer-consumer-contract pattern: when the consumer is the synthesis-console cockpit and the producer is a generative agent, the format and the parser must change together. Cross-reference: synthesis-console `docs/cockpit-design.md` "Drafts" section.
 
 ## v3.2.0 — Canonical Sent-State Marker Location
 
@@ -291,71 +325,44 @@ Meeting transcripts are NOT part of Slack sync — they are handled by the daily
 
 #### Draft Message Format (MANDATORY)
 
-Every draft must use this exact structure. The user's workflow is: glance at where to send, copy-paste the message, then verify grounding. Format accordingly.
+The canonical structural format for a draft block lives in [`templates/draft-block.md`](templates/draft-block.md). Read it as the literal template; this section gives the protocol-level rules for when and how to apply it.
+
+The shape (v3.3.0+) is two-tier:
+
+1. **Glanceable summary** — brief H3 title (≤60 char target), compressed `**Send to:**` line, optional one-line framing context, the message body itself.
+2. **Click-to-expand detail** — Grounding wrapped in `<details>/<summary>` so verification metadata is one click away rather than crowding the glance surface.
 
 ```markdown
-### Draft N: [short description]
-**Send to:** #channel-name — reply to @Author Name's message at Wed Apr 2, 10:59 AM EDT (TS: 1775141956.643419)
-— OR for new messages —
-**Send to:** #channel-name — new message (not a thread reply)
+### Draft N: <action> <recipient/topic>
 
-` ` `
-[Message text — ready to copy and paste exactly as-is]
-` ` `
+**Send to:** #channel · <thread or new>
 
-**Grounding:**
-- [Verified fact 1 — what source confirmed it]
-- [Verified fact 2 — what source confirmed it]
-- [Any staleness risk — e.g., "No new replies in thread since 11:23 AM"]
-```
-
-**Field rules:**
-
-1. **Send to** comes first. Must include:
-   - Channel name (e.g., `#le-csa-feedback`)
-   - Thread reply vs. new message
-   - If thread reply: the **author's name** and **human-readable date+time** of the parent message (e.g., "Thu Apr 2, 10:59 AM EDT")
-   - Unix TS in parentheses after the human time — the user doesn't need it but the agent uses it for re-reading threads
-
-2. **Message text** comes second, in a fenced code block. This is what the user copies and pastes. Nothing else should be between "Send to" and the code block.
-
-3. **Grounding** comes third. Bullet list of facts verified against primary sources (code, git, deploy logs, Slack threads). Must include:
-   - What was verified and where (file path, commit hash, GH Actions run ID, thread TS)
-   - Staleness check — whether anything has happened since the draft was written that could make it wrong
-   - Any facts the agent could NOT verify (flag explicitly so the user knows)
-
-**When marking drafts as SENT (canonical, v3.2.0+):**
-
-Two changes to the draft section:
-
-1. **Wrap the H3 title in `~~...~~`** so the title shows struck through. Keep the H3 short — title only. NEVER pack SENT metadata into the heading text.
-2. **Append a `**Sent:**` paragraph** immediately after the draft body, BEFORE the `**Grounding:**` paragraph if present.
-
-```markdown
-### ~~Draft N: [description]~~
-
-**Send to:** #channel-name — reply to @Author Name's message at Wed Apr 2, 10:59 AM EDT (TS: 1775141956.643419)
+[Optional one-line context if helpful]
 
 ` ` `
 [Message text]
 ` ` `
 
-**Sent:** Thu Apr 2 6:16 PM EDT — by Rajiv in #channel-name (TS=1775141956.643419) https://acme.slack.com/archives/C0XXXXXX/p1775141956643419
+<details><summary>Grounding (N facts verified)</summary>
 
-**Grounding:**
 - ...
+
+</details>
 ```
 
-**Sent paragraph fields:**
-- Human-readable date+time first (the user reads this).
-- "by [Name]" identifies who sent the message (useful in shared workspaces or when the sender is not the daily-plan owner).
-- Channel or DM target.
-- `TS=<unix-ts>` — agent uses this to re-read the message and any thread replies.
-- Permalink (when `slack_workspace_domain` is configured) — synthesis-console renders this as the "Open in Slack" / "View in Slack" link in the sent badge.
+**Protocol rules** (full field-by-field detail in `templates/draft-block.md`):
 
-**Backward compat:** the legacy H3-jammed form is still recognized by `thread_checker.py` and by synthesis-console v0.8.6+, so existing files continue to work. New SENT markers should use the canonical form above.
+- **H3 title** is a scannable label. ≤60 char target, ≤80 hard cap. Format: `Draft N: <action> <recipient/topic>`. NEVER include channel IDs, user IDs, thread timestamps, commit hashes, PR numbers, status markers, or compound clauses in the title.
+- **Send to** uses `#channel · <thread or new>` shape. Compressed metadata strip, not a verbose paragraph. If thread reply, include author name + human-readable time + `(TS=...)` on the same line.
+- **Optional context paragraph** — single plain paragraph between Send-to and the body, used only when helpful framing is needed. Skip if the body speaks for itself.
+- **Message body** — fenced code block, ready to paste into Slack. If the body itself contains triple-backtick fences, use 4-backtick OUTER fence per CommonMark (per synthesis-console v0.8.5 structural-axis rule).
+- **Grounding** — wrapped in `<details>/<summary>`. Bullets must include what was verified, where (file path / commit / GH Actions run / thread TS), and any staleness or unverified caveats.
 
-Cross-reference: synthesis-console's [docs/cockpit-design.md](https://github.com/synthesisengineering/synthesis-console/blob/main/docs/cockpit-design.md) "Drafts" section. The format and the cockpit's parser are the producer-consumer contract — they must change together.
+**When marking drafts as SENT** — see [`templates/sent-marker.md`](templates/sent-marker.md) for the canonical form. Summary: wrap the H3 title in `~~...~~`, and append a `**Sent:** <human-time> — by <Name> in <target> · (TS=...) <permalink>` paragraph between the body and the Grounding `<details>` block.
+
+**Backward compat** — the cockpit's parser (synthesis-console v0.8.6+) and `thread_checker.py` accept both the v3.3.0 two-tier form AND legacy pre-v3.3.0 forms (inline Grounding, H3-jammed SENT, etc.). Existing daily-plan files don't need retroactive rewriting; new drafts and rewrites should use the v3.3.0 form.
+
+**Cross-reference** — synthesis-console `docs/cockpit-design.md` "Drafts" section. The template files in this skill and the cockpit's parser are the producer-consumer contract; they must change together.
 
 ---
 
