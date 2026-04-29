@@ -5,7 +5,7 @@ license: "CC0-1.0"
 metadata:
   depends_on: "synthesis-daily-rituals, synthesis-project-management"
   author: "Rajiv Pant"
-  version: "3.0.0"
+  version: "3.1.0"
   source_repo: "github.com/synthesisengineering/synthesis-skills"
   source_type: "public"
 ---
@@ -15,6 +15,20 @@ metadata:
 A protocol for syncing Slack channels and threads to local transcript files using Slack MCP. Designed for AI-assisted workflows where an agent reads Slack on behalf of a user, saves transcripts locally, and updates a daily action plan.
 
 This skill provides the **protocol** — the sync methodology, thread re-reading discipline, transcript format, and action plan update rules. A per-project **config file** provides the specifics: which channels, which paths, which DMs. Prefer `.agents/slack-sync.yaml`; existing `.claude/slack-sync.yaml` configs remain supported.
+
+## v3.1.0 — Workspace Domain, Permalinks, and Provenance Discipline
+
+In v3.1.0 (2026-04-29), the skill gains three changes that work together:
+
+1. **A new optional `slack_workspace_domain` config field.** Each project's `slack-sync.yaml` declares the Slack workspace's URL host (e.g., `acme.slack.com`). The skill stays generic — workspace-specific values live in per-project config, never hardcoded.
+
+2. **Clickable permalinks replace bare Unix timestamps in transcript and draft formats.** Previous format wrote `(TS: 1234567890.123456)` as visible text. The new format hides the TS inside a Slack permalink URL — the visible text is the human-readable date/time, the link target is `https://{slack_workspace_domain}/archives/{channel_id}/p{ts_no_dot}`. The TS is still machine-readable (extractable from the URL); it's just not cluttering the rendered view in synthesis-console or any other Markdown viewer. Both formats are accepted by `thread_checker.py` during the transition; new sync output should use the permalink form when `slack_workspace_domain` is configured.
+
+3. **Provenance discipline becomes explicit.** Every `## ... sync (~HH:MM TZ)` section header added to a transcript file MUST be backed by a `slack_read_channel` or `slack_read_thread` call in the same turn. Section bodies may ONLY contain messages those MCP calls returned. If MCP returned no new messages, the section says "No new messages since last sync" and stops — no quotes, no TSes, no claims about specific people having sent specific things. See the dedicated "Provenance Discipline" section below for the full rule and the rationale (2026-04-29 fabrication incident).
+
+### Why these three changes are coupled
+
+Permalinks make TSes machine-traceable in the file (every linked time is a TS visible in the URL), which makes provenance violations grep-able. The Stop-hook backstop at `~/.claude/hooks/quote-provenance-checker.py` looks for TSes that appear in transcript writes but nowhere else in the session — and it parses TSes from BOTH the legacy `(TS: ...)` text and the new `/pNNNNNNNNNNNNNNNN` URL form. The format change and the discipline change reinforce each other.
 
 ## v3.0.0 — Per-Channel-Per-Day Layout
 
@@ -57,10 +71,14 @@ Any repo matching `ai-knowledge-*-private` is filtered from auto-discovery by de
 Create `.agents/slack-sync.yaml` in each project that uses this skill. Existing `.claude/slack-sync.yaml` configs are valid compatibility fallbacks.
 
 ```yaml
-# .agents/slack-sync.yaml — Slack sync configuration (v2.0.0 schema)
+# .agents/slack-sync.yaml — Slack sync configuration (v3.1.0 schema)
 #
 # workspace: (REQUIRED) Workspace identifier. Used in transcript headers; must match
 #   the workspace-private repo name pattern ai-knowledge-<workspace>-<person>-private.
+# slack_workspace_domain: (OPTIONAL but strongly recommended, v3.1.0+) The Slack
+#   workspace's URL host, e.g. "acme.slack.com". Used to construct clickable
+#   message permalinks in transcripts and draft messages. If absent, the skill
+#   falls back to the legacy bare-TS format and warns once per session.
 # transcripts_repo: Absolute path to the workspace-private repo (Type 3). Transcripts
 #   are written at {transcripts_repo}/{transcripts_path}/{channels,dms,group-dms,meetings}/.
 # transcripts_path: Relative subpath within transcripts_repo. Conventionally "transcripts".
@@ -72,6 +90,7 @@ Create `.agents/slack-sync.yaml` in each project that uses this skill. Existing 
 # channels / dm_channels / group_dm_channels: as before.
 
 workspace: example-workspace
+slack_workspace_domain: example-workspace.slack.com
 
 transcripts_repo: ~/workspaces/example-workspace/ai-knowledge-example-workspace-<person>-private
 transcripts_path: transcripts
@@ -296,27 +315,29 @@ Last synced: ~HH:MM TZ
 
 ---
 
-### [Author Name] — HH:MM TZ (TS: [unix_timestamp])
+### [Author Name] — [HH:MM TZ]({permalink})
 [Message content]
 **Thread ([N] replies):**
-- [Reply Author] HH:MM (TS: [unix_timestamp]): "[reply text]"
-- [Reply Author] HH:MM (TS: [unix_timestamp]): "[reply text]"
+- [Reply Author] [HH:MM]({reply_permalink}): "[reply text]"
+- [Reply Author] [HH:MM]({reply_permalink}): "[reply text]"
 **Reactions:** [emoji_name] ([count])
 
 ---
 
 ## Mid-day sync (~HH:MM TZ)
 
-### [Author Name] — HH:MM TZ (TS: [unix_timestamp])
+### [Author Name] — [HH:MM TZ]({permalink})
 [New message]
 
-#### Thread update (TS: [unix_timestamp]) — [N] replies
+#### Thread update — [N] replies — [HH:MM]({thread_permalink})
 - [New reply details]
 
 ---
 ```
 
 Within a single channel file, the channel name appears in the `# Slack #<channel>` top-level header only; messages below don't need `## #channel` subheaders (the entire file is about that channel).
+
+`{permalink}` is constructed per "Slack Permalink Construction" below: the visible text is the human-readable time, the link target carries the TS (`/pNNNNNNNNNNNNNNNN`). Files written before v3.1.0 may carry the legacy `(TS: 1234567890.123456)` format; both are accepted by `thread_checker.py` during the transition.
 
 ### DMs aggregator file (`slack/YYYY-MM-DD/_dms.md`)
 
@@ -330,7 +351,7 @@ Last synced: ~HH:MM TZ
 
 ## DM with [Person Name] (DM_CHANNEL_ID)
 
-### [Author Name] — HH:MM TZ (TS: [unix_timestamp])
+### [Author Name] — [HH:MM TZ]({permalink})
 [Message content]
 
 ---
@@ -348,18 +369,97 @@ Last synced: ~HH:MM TZ
 
 ## Group DM: [Group Name or Members] (GROUP_DM_ID)
 
-### [Author Name] — HH:MM TZ (TS: [unix_timestamp])
+### [Author Name] — [HH:MM TZ]({permalink})
 [Message content]
 
 ---
 ```
 
 Key rules:
-- **Always record the TS (Unix timestamp)** for every significant message. TSs are the key to re-reading threads later.
+- **Always record the TS** for every significant message. In v3.1.0+ the TS is embedded in the Slack permalink URL (`/pNNNNNNNNNNNNNNNN`); in pre-v3.1.0 files it appears as `(TS: 1234567890.123456)` text. Both forms are valid; `thread_checker.py` accepts both.
 - **Note reply counts** so the next sync can detect new replies.
 - **Separate sync sessions** with a horizontal rule and a timestamp header.
 - **Each file is scoped to its subject.** A per-channel file contains only that channel's messages. `_dms.md` contains only 1:1 DMs. `_group-dms.md` contains only group DMs. Mid-day syncs append to the same file; they don't fan out to new files.
 - **Directory listing tells the story.** `ls slack/YYYY-MM-DD/` shows which channels were active that day. File sizes show where activity concentrated.
+
+---
+
+## Slack Permalink Construction
+
+Every Slack message recorded in a transcript or quoted in a draft message MUST be presented as a clickable permalink (when `slack_workspace_domain` is configured). The permalink format:
+
+```
+https://{slack_workspace_domain}/archives/{channel_id}/p{ts_no_dot}
+```
+
+Where:
+- `{slack_workspace_domain}` is read from `.agents/slack-sync.yaml` (e.g., `acme.slack.com`).
+- `{channel_id}` is the channel ID (e.g., `C0EXAMPLE01`) — comes from the same config or from the MCP read result.
+- `{ts_no_dot}` is the message TS with the `.` removed. Example: TS `1234567890.123456` becomes `1234567890123456`.
+
+For thread replies, the same simple form navigates to the reply within its thread — Slack's permalink resolver handles thread context automatically. (Slack's "Copy link to message" UI emits a richer form with `?thread_ts=...&cid=...` query parameters; the simple `/pNNNNNNNNNNNNNNNN` form is sufficient for navigation and is what we generate.)
+
+### Visible text is human-readable; TS hides in the URL
+
+Instead of:
+
+```markdown
+### Author Name — HH:MM TZ (TS: 1234567890.123456)
+```
+
+Use:
+
+```markdown
+### Author Name — [HH:MM TZ](https://acme.slack.com/archives/C0XXXX/p1234567890123456)
+```
+
+The link target carries the TS for machine extraction (regex: `/p(\d{10})(\d{6})\b`). The visible time renders as a clickable link in synthesis-console, GitHub, VSCode preview, and any other Markdown viewer. No `(TS: ...)` clutter in the rendered view.
+
+### Draft message "Send to:" line
+
+Replies:
+
+```markdown
+**Send to:** #channel-name — reply to **Author's** message at [Wed, Apr 29, 4:09 PM EDT](https://acme.slack.com/archives/C0XXXX/p1777493393596089)
+```
+
+New top-level messages don't need a permalink — there's no parent to link to.
+
+### Fallback when `slack_workspace_domain` is absent
+
+If the per-project config does not set `slack_workspace_domain`, the skill MUST emit a one-time warning ("permalinks disabled — set `slack_workspace_domain` to enable clickable links in transcripts and drafts") and fall back to the legacy `(TS: 1234567890.123456)` text format. The skill does not invent a domain.
+
+---
+
+## Provenance Discipline
+
+The 2026-04-29 fabrication incident — an agent invented a Slack message attributed to a teammate, complete with a plausibly-tweaked TS, then drafted a reply to the imaginary message — motivated this section. The format-level fixes above (permalinks, embedded TSes) make provenance violations grep-able; the rules below define what's actually a violation.
+
+### MCP-read requirement for sync sections
+
+Every `## ... sync (~HH:MM TZ)` section header added to a transcript file (`transcripts/slack/YYYY-MM-DD/*.md`) MUST be backed by a `slack_read_channel` or `slack_read_thread` MCP call IN THE SAME TURN.
+
+- The body of that section may ONLY contain messages those MCP calls returned. Verbatim quotes, TS values, reactions, thread reply counts — all must come from the MCP output, not from the agent's expectations.
+- If the MCP call returned no new messages: the section says "No new messages since last sync" and stops. **It MUST NOT contain message quotes, TS values, or claims about specific people having sent specific things.**
+- Commentary about previously-synced messages (e.g., "this thread is now in good shape") is allowed, but must reference messages that ARE in the file from a prior sync — not introduce new ones.
+
+### Quote-attribution requirement everywhere
+
+Anywhere a quote is attributed to another person — transcripts, daily plans, project CONTEXT.md, session logs, draft "Send to" thread descriptors, anywhere — the agent must be able to cite the specific tool_use call in the current session that surfaced the quote. There is no "I remember it from earlier in the conversation." There is no "this is what they would say." Either there's a tool call to cite, or there's no quote.
+
+### Cross-file propagation rule
+
+When CONTEXT.md / daily plan / sessions logs cite a Slack message ("X said Y at HH:MM EDT"), the citation chain must trace `MCP call → transcript file → derivative file`. If a derivative file makes a claim that the transcript file doesn't support, the derivative is wrong. Re-verify against the actual Slack thread (or its synced transcript) before propagating.
+
+### Automated backstop
+
+A Stop hook at `~/.claude/hooks/quote-provenance-checker.py` (installed alongside `~/.claude/hooks/lazy-shortcut-detector.py` for the parallel discipline) scans the conversation transcript for Slack-TS-shaped values written into transcript / daily-plan / context files that did NOT appear elsewhere in the session — no MCP read, no Read tool result, no user message containing them, no other tool input. Candidates are logged to `~/.claude/quote-provenance-log.jsonl` with the file path, the fabricated TS values, and a stderr warning. The hook does NOT block writes; it makes violations visible after the fact for the user to review.
+
+### What this rule is NOT
+
+- It is not a rule against describing what's happening in a thread you've actually read. Summaries grounded in real synced content are fine.
+- It is not a rule against drafting messages. Draft message bodies are agent-authored prose; only their attribution metadata (TS, parent author quote, channel, thread context) needs provenance.
+- It is not a rule against speculating in your own analysis text ("Stephen will probably ask about X next"). Speculation is fine; recording the speculation as if it were a real message is not.
 
 ---
 

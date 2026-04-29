@@ -34,8 +34,11 @@ def extract_threads(transcript_path: str) -> list[dict]:
     # Channel header without ID: ### #channel-name (used in mid-day/evening sync sections)
     channel_header_no_id = re.compile(r'^#{1,3}\s+#([\w-]+)\s*$')
 
-    # TS pattern in parentheses: (TS: 1775064672.791199)
+    # TS pattern in parentheses: (TS: 1775064672.791199) — legacy pre-v3.1.0 format
     ts_in_parens = re.compile(r'\(TS:\s*([\d.]+)\)')
+    # TS embedded in Slack permalink path: /p1775064672791199 — v3.1.0+ format.
+    # Captures the 16-digit suffix; we re-insert the dot to normalize.
+    ts_in_permalink = re.compile(r'/p(\d{10})(\d{6})\b')
 
     # Reply count patterns
     reply_count_pattern = re.compile(r'(\d+)\s*repl(?:y|ies)')
@@ -62,8 +65,12 @@ def extract_threads(transcript_path: str) -> list[dict]:
             continue
 
         # Find TSes — only from lines that look like message headers or thread parents
-        # (lines starting with #### or containing "TS:" in a header-like context)
-        ts_matches = ts_in_parens.findall(line)
+        # (lines starting with #### or containing "TS:" or a Slack permalink in a
+        # header-like context). Both legacy `(TS: ...)` text and v3.1.0+ permalink
+        # URLs are accepted.
+        ts_matches = list(ts_in_parens.findall(line))
+        for prefix, suffix in ts_in_permalink.findall(line):
+            ts_matches.append(f"{prefix}.{suffix}")
         if not ts_matches:
             continue
 
@@ -132,10 +139,24 @@ def extract_unsent_drafts(action_plan_path: str) -> list[dict]:
                 continue
             seen_drafts.add(draft_num)
 
-            # Scan the next ~20 lines for a TS
+            # Scan the next ~20 lines for a TS — accept legacy `TS: ...` text or
+            # v3.1.0+ Slack permalink path `/pNNNNNNNNNNNNNNNN`.
             block = '\n'.join(lines[i:i + 20])
             ts_match = re.search(r'TS:\s*([\d.]+)', block)
+            permalink_match = re.search(r'/p(\d{10})(\d{6})\b', block)
             channel_match = re.search(r'Channel.*?([A-Z][A-Z0-9]{8,})', block)
+            if not ts_match and permalink_match:
+                # Synthesize a match-like wrapper exposing group(1) for the
+                # downstream code below.
+                class _M:
+                    def __init__(self, ts):
+                        self._ts = ts
+                    def group(self, _n):
+                        return self._ts
+                ts_match = _M(f"{permalink_match.group(1)}.{permalink_match.group(2)}")
+            # Permalink also carries the channel id under /archives/ — pull it.
+            if not channel_match:
+                channel_match = re.search(r'/archives/([A-Z][A-Z0-9]{8,})/', block)
 
             drafts.append({
                 'number': draft_num,
