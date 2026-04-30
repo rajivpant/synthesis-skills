@@ -12,7 +12,7 @@ license: "CC0-1.0"
 depends_on: []
 metadata:
   author: "Rajiv Pant"
-  version: "1.1.0"
+  version: "1.2.0"
   source_repo: "github.com/synthesisengineering/synthesis-skills"
   source_type: "public"
 ---
@@ -238,6 +238,54 @@ For each approved platform, provide:
 **Posting Sequence**: Which platform first and why. Spacing between platforms. Timing considerations.
 
 **Cross-Pollination**: When to reference discussion from one platform on another. How to synthesize feedback. Opportunities for follow-up content.
+
+## The Human Polish Pass
+
+AI-drafted posts are 85%-finished drafts. The remaining 15% is the human's contribution — texture, personality, and engagement-stance reframing that signal authentic authorship. Treat the AI output as a strong starting point, not a finished post. A draft that feels DONE discourages the edit pass; the post goes out as-is and reads as machine-shaped. A draft that feels like a strong starting point gets polished and reads as the writer's own.
+
+### What AI does reliably (the 85%)
+
+- Substantive structure (hook, develop, URL placement, call to action).
+- Voice-rule compliance (forbidden language, sentence variety, no diminishers, no concierge tone).
+- Platform format (length, sequence, hashtag/mention discipline).
+- Strategic brief alignment (right insight emphasized for the right audience).
+- Cross-platform coordination (which platform first, what to vary across them).
+
+### What the human adds (the 15%)
+
+These are texture moves the AI should NOT try to fake — they only work when they come from the actual writer:
+
+- **Personality moments** — an inside joke, a callback to a recent post, a parenthetical aside, a mid-paragraph "ok, back to the subject..." — anything that signals "this was written by a real person, not generated." Generic personality (peppered emoji, "haha", "btw") is worse than no personality.
+- **Specific callbacks** — references to recent posts, prior conversations, ongoing themes the writer's audience tracks. AI does not know which callbacks land for the writer's specific followers.
+- **The unique-to-this-moment edit** — small adjustments that reflect what the writer is currently learning, currently noticing, currently revising in their thinking. AI cannot anticipate these.
+
+### What the AI CAN apply as polish defaults (codifiable patterns)
+
+These four patterns belong in the first draft, not added by the human in review:
+
+1. **Closing questions in peer-stance, not expert-stance.** Default to invitation framing, not quiz framing.
+   - Avoid: "Where have you hit this? What did you change?"
+   - Prefer: "Have you run into this? If yes, where? What did you change in response?"
+   - The first reads as a teacher quizzing students. The second reads as a peer asking colleagues. The peer-stance form invites contributions; the expert-stance form filters for confident responders only.
+
+2. **Add a learner-stance closing for emerging topics.** When the post is about a new or evolving domain, end with the writer's explicit still-learning position. This is humility used correctly — not self-deprecation, but acknowledgment that the topic is moving and the writer is exploring it. Example: "I'm still learning this new world of [domain]." The peer-relationship signal it sends drives more substantive engagement than a confident close.
+
+3. **Build the comments hook into LinkedIn drafts.** When the URL is in the first comment (LinkedIn pattern that boosts reach), the post body must signal this — otherwise readers may not realize the URL exists. A line like "I'll share more in the comments" or "Continued in the comments" pairs the body with the comment-thread layer where additional value lives. This also drives the comment-engagement signal that LinkedIn's algorithm rewards.
+
+4. **Restrained verbs, no hyperbole.** Avoid "hit hard," "completely changed," "fundamentally," "absolutely," "transformed" when describing the writer's own experience. Use measured equivalents — "hit," "changed," "I noticed." The human will likely strip hyperbolic verbs on review anyway; the AI should not include them in the first place. Hyperbole reads as forced enthusiasm; restraint reads as considered judgment.
+
+### What AI should NOT do
+
+- Do not insert generic personality placeholders trying to mimic the human polish pass. Inserted "haha" or "btw" or random emoji read as machine-attempting-human and are worse than a clean draft.
+- Do not invent callbacks to posts that may not exist. If the writer has been working on a theme, they will reference it themselves.
+- Do not over-edit conversational irregularity. Slight roughness — a parenthetical aside, an "ok let me get back to..." — is human texture. AI tends to smooth these out, producing the perfectly-polished tell.
+- Do not claim emotional states ("I'm so excited") or expertise positions ("As someone who has been doing this for years") that belong to the writer to claim or not claim.
+
+### Workflow implication
+
+When generating posts, present them as drafts ready for the human polish pass, not as final-form posts. The user's edit-and-then-publish step is part of the workflow, not an exception. Drafts that include the four codifiable polish patterns (peer-stance closing, learner-stance for emerging topics, comments hook, restrained verbs) reach the human in better shape; the human's polish pass adds personality and timing-specific texture on top of an already-substantive draft.
+
+---
 
 ## Engagement Management
 
