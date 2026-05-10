@@ -5,7 +5,7 @@ license: "CC0-1.0"
 depends_on: []
 metadata:
   author: "Rajiv Pant"
-  version: "1.4.0"
+  version: "1.5.0"
   source_repo: "github.com/synthesisengineering/synthesis-skills"
   source_type: "public"
 ---
@@ -80,11 +80,13 @@ mac-sync/
 
 ### Full Sync ("run my mac-sync")
 
-Performs all four operations:
-1. **Config file sync** — bidirectional, based on modification timestamps
-2. **Workspace config symlinks** — idempotent reconciliation against each workspace-private repo's `.agents/` canonical (see Workspace Config Symlinks section below)
-3. **Git repo sync** — fetch, pull if behind, push if ahead
-4. **One-time actions** — execute any pending machine-specific actions
+Performs these operations in order:
+1. **Pre-pull iCloud download check** — `brctl monitor --wait-downloaded -t 300 "$ICLOUD_BASE"` and `.icloud` placeholder sweep, per the iCloud Propagation Verification section. Ensures any pulls operate on materialized data.
+2. **Config file sync** — bidirectional, based on modification timestamps
+3. **Post-push iCloud upload check** — `brctl monitor --wait-uploaded -t 300 "$ICLOUD_BASE"`, per the iCloud Propagation Verification section. Ensures local-newer pushes have reached Apple's servers before reporting completion.
+4. **Workspace config symlinks** — idempotent reconciliation against each workspace-private repo's `.agents/` canonical (see Workspace Config Symlinks section below)
+5. **Git repo sync** — fetch, pull if behind, push if ahead
+6. **One-time actions** — execute any pending machine-specific actions
 
 ### Config-Only Sync
 
@@ -184,6 +186,77 @@ done
 
 ---
 
+## iCloud Propagation Verification (CRITICAL — added v1.5.0)
+
+iCloud sync between Macs is **two-stage** and both stages take time:
+
+1. **Upload:** source Mac's local file → Apple's iCloud servers (handled by `bird` / `cloudd`).
+2. **Download:** Apple's iCloud servers → destination Mac's local file (also `bird` / `cloudd`).
+
+The receiving Mac CANNOT pull data that has not completed stage 1. Verifying the receiving side's download state without first verifying the source side's upload state misses the more fundamental question and can result in: stale iCloud content overwriting good local copies, new files silently skipped because they haven't propagated yet, and false "sync complete" reports when actual state diverges.
+
+### After every push to iCloud — wait for upload (MANDATORY)
+
+After completing config-file sync (including the bidirectional sync's local-newer cases), the assistant MUST run:
+
+```bash
+brctl monitor --wait-uploaded -t 300 "$ICLOUD_BASE"
+```
+
+This blocks for up to 5 minutes until iCloud confirms `Stopping the query because all items are now uploaded`. Do NOT report sync complete — and especially do NOT draft cross-Mac handoff instructions — until this returns successfully.
+
+If the command times out without confirming upload, alert the user. Network issues or Apple-side queue backlog may be at play. Do not proceed with handoff instructions in that case.
+
+### Before every pull from iCloud — wait for download (MANDATORY)
+
+Before pulling iCloud → local (especially in cross-Mac handoff scenarios where another Mac just pushed), the assistant MUST run:
+
+```bash
+brctl monitor --wait-downloaded -t 300 "$ICLOUD_BASE"
+```
+
+This blocks until all items have been downloaded from iCloud to the local Mac. Then sweep for placeholder files that signal an unmaterialized download:
+
+```bash
+find "$ICLOUD_BASE" -type f \( -name "*.icloud" -o -name ".*.icloud" \) 2>/dev/null
+```
+
+If any placeholders remain, force materialization:
+
+```bash
+brctl download "$ICLOUD_BASE"
+```
+
+Then re-run the find. Only proceed with the pull operation when the placeholder list is empty AND `brctl monitor --wait-downloaded` has returned cleanly.
+
+### Cross-Mac handoff (one-time actions involving another Mac)
+
+When drafting a one-time action that involves running mac-sync on a different Mac (e.g., "the M5 should now pull what the Mac Mini just pushed"):
+
+1. **On the source Mac, BEFORE drafting the handoff prompt:** run `brctl monitor --wait-uploaded -t 300 "$ICLOUD_BASE"` and confirm upload complete. Only then is it safe to send the prompt.
+2. **In the handoff prompt itself:** include `brctl monitor --wait-downloaded -t 300 "$ICLOUD_BASE"` plus the `.icloud` placeholder sweep as the FIRST step on the destination Mac, before any pull operation.
+
+These two together close the two-stage gap.
+
+### Pre-response self-check
+
+Before sending any message that includes a cross-Mac handoff prompt, the assistant must ask itself: *"have I verified iCloud upload is complete on this Mac?"* If no, run the check first.
+
+This is the same discipline as the cache-vs-truth rule (verify state has reached the system that will be read), applied to iCloud propagation.
+
+### Full bidirectional sync — when to run which check
+
+| Scenario | Run before pulling local from iCloud | Run after pushing local to iCloud |
+|----------|--------------------------------------|----------------------------------|
+| Single-Mac everyday sync | `--wait-downloaded` (cheap no-op if already current) | `--wait-uploaded` (cheap no-op if no new content) |
+| Cross-Mac handoff (other Mac just pushed) | `--wait-downloaded` (REQUIRED — waits for propagation) | `--wait-uploaded` (REQUIRED if drafting reverse handoff) |
+| Pull-only sync ("from iCloud") | `--wait-downloaded` (REQUIRED) | N/A (no push) |
+| Push-only sync ("to iCloud") | N/A (no pull) | `--wait-uploaded` (REQUIRED) |
+
+In the everyday single-Mac case the checks are cheap — they return almost immediately when iCloud is current. The cost of always running them is small; the cost of skipping them in a cross-Mac case is data loss.
+
+---
+
 ## Config File Sync Protocol
 
 ### Bidirectional Sync (default)
@@ -224,6 +297,7 @@ For config files containing machine-specific paths, use template files with plac
 4. **Quote all paths** — iCloud paths contain spaces ("Mobile Documents")
 5. **Never overwrite with empty** — if either file is empty or missing, do not overwrite the non-empty version
 6. **Skip machine-specific path differences** — if the only differences are username-specific paths (e.g., `/Users/alice/` vs `/Users/bob/`), skip and note in summary
+7. **Verify iCloud propagation** — run `brctl monitor --wait-uploaded` after push, `brctl monitor --wait-downloaded` before pull, per the iCloud Propagation Verification section above. Mandatory for cross-Mac handoff scenarios.
 
 ---
 
