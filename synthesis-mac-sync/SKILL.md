@@ -5,7 +5,7 @@ license: "CC0-1.0"
 depends_on: []
 metadata:
   author: "Rajiv Pant"
-  version: "1.5.0"
+  version: "1.5.1"
   source_repo: "github.com/synthesisengineering/synthesis-skills"
   source_type: "public"
 ---
@@ -81,7 +81,7 @@ mac-sync/
 ### Full Sync ("run my mac-sync")
 
 Performs these operations in order:
-1. **Pre-pull iCloud download check** — `brctl monitor --wait-downloaded -t 300 "$ICLOUD_BASE"` and `.icloud` placeholder sweep, per the iCloud Propagation Verification section. Ensures any pulls operate on materialized data.
+1. **Pre-pull iCloud download check** — `brctl download "$ICLOUD_BASE"` followed by polling for `.icloud` placeholder files until none remain (with 5-minute timeout), per the iCloud Propagation Verification section. Ensures any pulls operate on materialized data.
 2. **Config file sync** — bidirectional, based on modification timestamps
 3. **Post-push iCloud upload check** — `brctl monitor --wait-uploaded -t 300 "$ICLOUD_BASE"`, per the iCloud Propagation Verification section. Ensures local-newer pushes have reached Apple's servers before reporting completion.
 4. **Workspace config symlinks** — idempotent reconciliation against each workspace-private repo's `.agents/` canonical (see Workspace Config Symlinks section below)
@@ -207,34 +207,40 @@ This blocks for up to 5 minutes until iCloud confirms `Stopping the query becaus
 
 If the command times out without confirming upload, alert the user. Network issues or Apple-side queue backlog may be at play. Do not proceed with handoff instructions in that case.
 
-### Before every pull from iCloud — wait for download (MANDATORY)
+### Before every pull from iCloud — verify download materialization (MANDATORY)
 
-Before pulling iCloud → local (especially in cross-Mac handoff scenarios where another Mac just pushed), the assistant MUST run:
+Before pulling iCloud → local (especially in cross-Mac handoff scenarios where another Mac just pushed), the assistant MUST verify all items have been downloaded from iCloud to the local Mac.
 
-```bash
-brctl monitor --wait-downloaded -t 300 "$ICLOUD_BASE"
-```
-
-This blocks until all items have been downloaded from iCloud to the local Mac. Then sweep for placeholder files that signal an unmaterialized download:
+**macOS `brctl monitor` only supports `--wait-uploaded` — it has NO `--wait-downloaded` flag.** The correct download verification is **trigger-then-poll**:
 
 ```bash
-find "$ICLOUD_BASE" -type f \( -name "*.icloud" -o -name ".*.icloud" \) 2>/dev/null
-```
-
-If any placeholders remain, force materialization:
-
-```bash
+# 1. Trigger materialization of all items in the sync folder.
+#    Idempotent — no-op if everything is already local.
 brctl download "$ICLOUD_BASE"
+
+# 2. Poll for .icloud placeholder files until none remain (with timeout).
+DEADLINE=$(($(date +%s) + 300))
+while true; do
+  PLACEHOLDERS=$(find "$ICLOUD_BASE" -type f \( -name "*.icloud" -o -name ".*.icloud" \) 2>/dev/null)
+  if [ -z "$PLACEHOLDERS" ]; then echo "All items materialized."; break; fi
+  if [ $(date +%s) -ge $DEADLINE ]; then
+    echo "TIMEOUT: still pending downloads after 5 minutes:"; echo "$PLACEHOLDERS"
+    break
+  fi
+  sleep 5
+done
 ```
 
-Then re-run the find. Only proceed with the pull operation when the placeholder list is empty AND `brctl monitor --wait-downloaded` has returned cleanly.
+Only proceed with the pull operation when the placeholder list is empty. If the loop times out, alert the user — there may be a network or iCloud-queue issue.
+
+**Why `.icloud` placeholders work as the signal:** when iCloud has a file but the local Mac hasn't downloaded its content yet, macOS represents it as a hidden zero-byte placeholder file with a `.<filename>.icloud` extension instead of the real file. Once iCloud finishes downloading, the placeholder is replaced with the actual file. So an empty placeholder set means full materialization.
 
 ### Cross-Mac handoff (one-time actions involving another Mac)
 
-When drafting a one-time action that involves running mac-sync on a different Mac (e.g., "the M5 should now pull what the Mac Mini just pushed"):
+When drafting a one-time action that involves running mac-sync on a different Mac (e.g., "the second Mac should now pull what the first Mac just pushed"):
 
 1. **On the source Mac, BEFORE drafting the handoff prompt:** run `brctl monitor --wait-uploaded -t 300 "$ICLOUD_BASE"` and confirm upload complete. Only then is it safe to send the prompt.
-2. **In the handoff prompt itself:** include `brctl monitor --wait-downloaded -t 300 "$ICLOUD_BASE"` plus the `.icloud` placeholder sweep as the FIRST step on the destination Mac, before any pull operation.
+2. **In the handoff prompt itself:** include the download trigger + placeholder poll above as the FIRST step on the destination Mac, before any pull operation.
 
 These two together close the two-stage gap.
 
@@ -246,12 +252,12 @@ This is the same discipline as the cache-vs-truth rule (verify state has reached
 
 ### Full bidirectional sync — when to run which check
 
-| Scenario | Run before pulling local from iCloud | Run after pushing local to iCloud |
-|----------|--------------------------------------|----------------------------------|
-| Single-Mac everyday sync | `--wait-downloaded` (cheap no-op if already current) | `--wait-uploaded` (cheap no-op if no new content) |
-| Cross-Mac handoff (other Mac just pushed) | `--wait-downloaded` (REQUIRED — waits for propagation) | `--wait-uploaded` (REQUIRED if drafting reverse handoff) |
-| Pull-only sync ("from iCloud") | `--wait-downloaded` (REQUIRED) | N/A (no push) |
-| Push-only sync ("to iCloud") | N/A (no pull) | `--wait-uploaded` (REQUIRED) |
+| Scenario | Before pulling local from iCloud | After pushing local to iCloud |
+|----------|----------------------------------|-------------------------------|
+| Single-Mac everyday sync | `brctl download` + placeholder poll (cheap no-op if already current) | `brctl monitor --wait-uploaded` (cheap no-op if no new content) |
+| Cross-Mac handoff (other Mac just pushed) | `brctl download` + placeholder poll (REQUIRED — waits for propagation) | `brctl monitor --wait-uploaded` (REQUIRED if drafting reverse handoff) |
+| Pull-only sync ("from iCloud") | `brctl download` + placeholder poll (REQUIRED) | N/A (no push) |
+| Push-only sync ("to iCloud") | N/A (no pull) | `brctl monitor --wait-uploaded` (REQUIRED) |
 
 In the everyday single-Mac case the checks are cheap — they return almost immediately when iCloud is current. The cost of always running them is small; the cost of skipping them in a cross-Mac case is data loss.
 
@@ -297,7 +303,7 @@ For config files containing machine-specific paths, use template files with plac
 4. **Quote all paths** — iCloud paths contain spaces ("Mobile Documents")
 5. **Never overwrite with empty** — if either file is empty or missing, do not overwrite the non-empty version
 6. **Skip machine-specific path differences** — if the only differences are username-specific paths (e.g., `/Users/alice/` vs `/Users/bob/`), skip and note in summary
-7. **Verify iCloud propagation** — run `brctl monitor --wait-uploaded` after push, `brctl monitor --wait-downloaded` before pull, per the iCloud Propagation Verification section above. Mandatory for cross-Mac handoff scenarios.
+7. **Verify iCloud propagation** — run `brctl monitor --wait-uploaded` after push and `brctl download` + `.icloud` placeholder polling before pull, per the iCloud Propagation Verification section above. Mandatory for cross-Mac handoff scenarios.
 
 ---
 
