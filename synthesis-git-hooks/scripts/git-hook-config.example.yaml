@@ -59,10 +59,12 @@ tier_1_strict_only:
     - 'my boss'
 
   # Confidentiality markers — explicit OPSEC for outward-facing artifacts.
+  # Word-boundary anchors so "confidential" doesn't trip on the legitimate
+  # technical term "confidentiality" (Python class names, JSON keys, etc.).
   confidentiality_markers:
-    - 'confidential'
+    - '\bconfidential\b'
     - '\bNDA\b'
-    - 'proprietary'
+    - '\bproprietary\b'
 
   # Confidential client / company names. Add your own. Examples:
   #   - 'acme-corp'
