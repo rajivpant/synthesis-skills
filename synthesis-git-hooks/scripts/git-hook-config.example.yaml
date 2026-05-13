@@ -101,7 +101,12 @@ diff_exclude_paths:
   # that's the skill's curriculum, not a leak. Add similar directories as
   # you create methodology-doc skills.
   - '(^|/)skills/starter_pack/'
-  # Add more methodology-doc directories as you create them.
+  # Modules whose job is to enforce / classify the patterns themselves
+  # (e.g. Ragbot's synthesis_engine.policy package). Their docstrings and
+  # tests must mention "confidential" in technical context.
+  - '(^|/)synthesis_engine/policy/'
+  - '(^|/)test_policy\.py$'
+  - '(^|/)test_memory_cross_workspace\.py$'
 
 # Check commit messages (in addition to staged diffs) for `strict` repos.
 # Disabled in `personal` repos because the same logic that allows the words
