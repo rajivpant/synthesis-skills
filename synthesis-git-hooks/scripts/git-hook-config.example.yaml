@@ -118,6 +118,12 @@ diff_exclude_paths:
   - '(^|/)test_mcp_server\.py$'
   - '(^|/)test_cross_workspace_synthesis\.py$'
   - '(^|/)test_agent_loop_multi_workspace\.py$'
+  # Release-prep docs that legitimately describe the policy levels
+  # (PUBLIC / PERSONAL / CLIENT_CONFIDENTIAL / AIR_GAPPED). Adopters
+  # writing release notes that name those policy levels can skip these.
+  - '(^|/)CHANGELOG\.md$'
+  - '(^|/)docs/release-notes-.+\.md$'
+  - '(^|/)docs/screenshots/CAPTURE\.md$'
   # Lock files contain transitive package names from the ecosystem we
   # can't rename. Lockfile changes are usually pure noise from
   # `npm install` and rarely carry leak risk on their own.
