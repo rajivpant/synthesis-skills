@@ -118,6 +118,12 @@ diff_exclude_paths:
   - '(^|/)test_mcp_server\.py$'
   - '(^|/)test_cross_workspace_synthesis\.py$'
   - '(^|/)test_agent_loop_multi_workspace\.py$'
+  # Lock files contain transitive package names from the ecosystem we
+  # can't rename. Lockfile changes are usually pure noise from
+  # `npm install` and rarely carry leak risk on their own.
+  - '(^|/)package-lock\.json$'
+  - '(^|/)yarn\.lock$'
+  - '(^|/)pnpm-lock\.yaml$'
 
 # Check commit messages (in addition to staged diffs) for `strict` repos.
 # Disabled in `personal` repos because the same logic that allows the words
