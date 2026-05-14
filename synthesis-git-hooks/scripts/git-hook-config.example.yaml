@@ -105,10 +105,19 @@ diff_exclude_paths:
   - '(^|/)skills/starter_pack/'
   # Modules whose job is to enforce / classify the patterns themselves
   # (e.g. Ragbot's synthesis_engine.policy package). Their docstrings and
-  # tests must mention "confidential" in technical context.
+  # tests must mention "confidential" in technical context. Same logic
+  # applies to consumers of those types (the MCP server, the cross-
+  # workspace driver, the agent loop, and their tests).
   - '(^|/)synthesis_engine/policy/'
+  - '(^|/)synthesis_engine/mcp_server/'
+  - '(^|/)synthesis_engine/skills/cross_workspace_driver\.py$'
+  - '(^|/)synthesis_engine/agent/loop\.py$'
   - '(^|/)test_policy\.py$'
+  - '(^|/)test_policy_api\.py$'
   - '(^|/)test_memory_cross_workspace\.py$'
+  - '(^|/)test_mcp_server\.py$'
+  - '(^|/)test_cross_workspace_synthesis\.py$'
+  - '(^|/)test_agent_loop_multi_workspace\.py$'
 
 # Check commit messages (in addition to staged diffs) for `strict` repos.
 # Disabled in `personal` repos because the same logic that allows the words
