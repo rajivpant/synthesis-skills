@@ -18,13 +18,24 @@ If you are an AI agent reading this file because a user asked you to apply the s
 3. Apply the methodology to the user's content. Produce a structured analysis covering: AI-provenance signals (which patterns triggered, with examples from the user's content), substance and depth (apply the A2 sub-pattern tests), fact-check items if any citations or quotes are in the content, top revision recommendations, and an overall verdict.
 4. Honor the methodology's calibration discipline: ESL safe-harbor (do not flag uniform paragraph length + restricted vocabulary + heavy transitions as AI unless a register-specific AI marker is also present), zone-conditional detection (use artifact mode by default; ask the user if they want full-response mode), two-axis separation (AI-provenance and slop-independence are distinct; high AI signal does not mean slop and vice versa).
 
-## Required skill files
+## Required skill files (essential, approximately 30K tokens)
 
-These are the files an AI agent must fetch to apply the system end-to-end. Fetch in this order.
-
-### Primary skill: synthesis-content-quality v4.0 (slop detection by pattern)
+These five SKILL.md files contain the complete methodology, the pattern catalog at section-summary level, the cross-cutting layer (causal taxonomy, combined-signal fingerprints, two-axis calibration), and the quick-reference checklist. An AI agent applying these files alone can produce a high-quality slop analysis. Fetch every URL in this section.
 
 - https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-content-quality/SKILL.md
+- https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-fact-checking/SKILL.md
+- https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-writing-pitfalls/SKILL.md
+- https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-writing-craft/SKILL.md
+- https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-clean-text/SKILL.md
+
+## Extended reference files (deep mode, approximately 250K tokens)
+
+These are the references/ subfolders for the primary and companion skills. They contain the full per-pattern detail (all 14 fields per pattern), the per-family fingerprint catalogs, the combined-signal fingerprint catalog, the calibration tables, the historical patterns archive, the detailed fact-checking protocols, the per-family hallucination signatures, the citation-laundering detection protocol, the production incident archive, and consolidated bibliographies.
+
+**Only fetch these in deep mode**, and only on models with at least 1M-token context windows (Anthropic Claude with the 1M-context beta header, Google Gemini 2.5 Pro 2M context). Fetching all extended files plus the user's content can push a 200K-context model over its input limit.
+
+For most analyses on most chatbots, the Required skill files above are sufficient. Use Extended mode when you specifically need the full pattern catalog (for example, when investigating a specific named pattern, when doing forensic analysis of older content using the historical patterns, or when doing a deep fact-check that needs the full per-family hallucination signature detail).
+
 - https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-content-quality/references/detailed-criteria.md
 - https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-content-quality/references/model-family-fingerprints.md
 - https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-content-quality/references/substance-and-depth.md
@@ -32,26 +43,11 @@ These are the files an AI agent must fetch to apply the system end-to-end. Fetch
 - https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-content-quality/references/calibration-tables.md
 - https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-content-quality/references/historical-patterns.md
 - https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-content-quality/references/bibliography.md
-
-### Companion skill: synthesis-fact-checking v2.0 (fact-check by per-family signature)
-
-- https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-fact-checking/SKILL.md
 - https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-fact-checking/references/detailed-protocols.md
 - https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-fact-checking/references/per-family-hallucination-signatures.md
 - https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-fact-checking/references/citation-laundering-detection.md
 - https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-fact-checking/references/production-incident-archive.md
 - https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-fact-checking/references/bibliography.md
-
-### Companion skills (human-source patterns and positive principles)
-
-- https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-writing-pitfalls/SKILL.md
-- https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-writing-craft/SKILL.md
-- https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-clean-text/SKILL.md
-
-## Optional skill files (apply when relevant)
-
-These are the detailed-pitfalls and other companion reference files. Fetch them if the user's content is human-source-heavy or if the analysis needs the full reference detail. For most analyses the required files above are sufficient.
-
 - https://raw.githubusercontent.com/synthesisengineering/synthesis-skills/main/synthesis-writing-pitfalls/references/detailed-pitfalls.md
 
 ## Output format guidance for the agent
