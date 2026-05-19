@@ -63,7 +63,7 @@
 
 21. **Zaitsu, W., Jin, M., Ishihara, S., Tsuge, S., Inaba, M. (2025).** "Stylometry can reveal artificial intelligence authorship, but humans struggle." PLoS One 20(10): e0335369. **C [unverified at expansion].** Llama 3.1 placed separately on MDS dimensions; Llama 3.1 86.2 percent human-detection accuracy; GPT-4 74.1 percent. Anchors: A1-LLAMA-001, B2 combined-signal calibration.
 
-22. **Shaib, C., Chakrabarty, T., Garcia-Olano, D., Wallace, B. C. (2025).** "Measuring AI 'Slop' in Text." arxiv 2509.19163. **C [unverified at expansion].** Slop taxonomy via expert interviews; correlates with coherence and relevance. Cited by Perplexity, Claude expansion. Anchors: A2 framing, "slop, not AI detection" core-philosophy note.
+22. **Shaib, C., Chakrabarty, T., Garcia-Olano, D., Wallace, B. C. (2025).** "Measuring AI 'Slop' in Text." arxiv 2509.19163. **C [unverified at expansion].** Slop taxonomy via expert interviews; correlates with coherence and relevance. Cited by Perplexity, Claude expansion. Anchors: A2 framing, "slop, not just AI detection" core-philosophy note.
 
 23. **Bender, E. M., Gebru, T., McMillan-Major, A., Shmitchell, S. (2021).** "On the Dangers of Stochastic Parrots." FAccT 2021, 610 to 623. **C [unverified at expansion].** Anchors: A2 framing, B1 RHF and AST.
 
@@ -153,7 +153,7 @@
 
 60. **Wired (2025).** "AI-generated research summaries and the loss of argument." **C [unverified at expansion].** Anchors: A2 public framing, A2-SUB-010.
 
-61. **The New Yorker (2025).** "The Slop Era." **C [unverified at expansion].** Anchors: A2 framing, "slop, not AI detection" core-philosophy note.
+61. **The New Yorker (2025).** "The Slop Era." **C [unverified at expansion].** Anchors: A2 framing, "slop, not just AI detection" core-philosophy note.
 
 62. **Nieman Lab (2025).** "AI-generated news summaries lack original reporting." **C [unverified at expansion].** Anchors: A3-26 in journalism contexts.
 

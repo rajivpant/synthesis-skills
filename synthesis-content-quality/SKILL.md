@@ -45,7 +45,7 @@ Use all three together for a comprehensive quality pass. Use this one alone when
 
 ## Core Philosophy
 
-Slop is the enemy, not AI. AI-assisted content creation is legitimate and valuable. The distinction that matters is not "did AI help write this" but "is this worth publishing."
+Slop is the enemy, not just AI. The tool catches AI-generation patterns specifically (by model family, with empirical anchors), and also catches slop in human-written content. AI-assisted content creation is legitimate and valuable. The distinction that matters is not "did AI help write this" but "is this worth publishing." Both questions get answered, on separate axes.
 
 Three categories of AI-collaborated content:
 
