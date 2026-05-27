@@ -7,9 +7,10 @@ depends_on:
   - synthesis-project-management
   - synthesis-slack-sync
   - synthesis-repo-guard
+  - synthesis-checkpoint
 metadata:
   author: "Rajiv Pant"
-  version: "2.8.0"
+  version: "2.9.0"
   source_repo: "github.com/synthesisengineering/synthesis-skills"
   source_type: "public"
 ---
@@ -17,6 +18,16 @@ metadata:
 # Daily Rituals — Global Checklists
 
 Standard day-start and day-end rituals for synthesis engineering projects. These are the global (per-person) checklists. Each project may have a project-specific supplement that extends these with channel-specific sync, repo-specific checks, and stakeholder-specific communications.
+
+## v2.9.0 — Temporal & State Verification as Day-Start Step 1; new synthesis-checkpoint dependency
+
+In v2.9.0 (2026-05-27), the Day-Start ritual gains a new Step 1 — "Temporal & State Verification" — that runs BEFORE all other day-start steps. It anchors today's date from `date`, runs `git log` per active project to verify "last session," and reconciles cached `last_session` fields against git timestamps. Triggered by the 2026-05-27 inbox-cleanup mis-dated-session-log incident; codified to prevent recurrence in any synthesis project.
+
+Step renumbering across the day-start: NEW Step 1 = Temporal & State Verification. Old Step 1 (Context Optimization) → Step 2. Old Step 2 (Sync) → Step 3, with sub-steps 3a/3b/3c. Old Step 3 (Catch-Up Read) → Step 4. Old Step 4 (PR Review Queue) → Step 5. Old Step 5 (Day Plan) → Step 6. Old Step 6 (Morning Messages) → Step 7. The Day-End checklist is unchanged in numbering; Day-End Step 7 (Context Capture) gains explicit push-confirmation language matching the new discipline.
+
+New dependency: `synthesis-checkpoint` — a lightweight skill that codifies the date-verification + state-verification protocol. The day-start ritual delegates to synthesis-checkpoint for the per-project verification work in Step 1.
+
+The discipline this enforces (cross-tool, codified in CLAUDE.md item 13c–13e and the synthesis-context-temporal-continuity project): treat session-log entry dates, "N days ago" claims, and CONTEXT.md fields as caches subject to drift. Verify against `date` and `git log` before quoting them into any output.
 
 ## v2.8.0 — Weekly Loose-Ends Review on Fridays
 
@@ -130,22 +141,33 @@ These values are user-specific. Update them for your environment.
 
 Execute in this order (each step depends on the one before it).
 
-### 1. Context Optimization
+### 1. Temporal & State Verification — RUN FIRST, every day
+
+The LLM has no clock and its sense of "today" can drift across conversation gaps. Project-state cached in CONTEXT.md may be stale. Before any other day-start step, anchor today's date and verified project state from external sources.
+
+- [ ] Run `date "+%Y-%m-%d %H:%M:%S %Z (%A)"` and record the output. This is today's authoritative date. If your in-context impression of the date differed, that is drift — treat other in-context impressions of time, intervals, and "last session" as also potentially drifted.
+- [ ] For each active project listed in the workspace's `index.yaml`, run `git log -5 --pretty=format:"%h %ai %s" -- projects/<id>/` and read the output. The most recent commit timestamp is the project's verified "last session." Trust this over any cached `last_session` field in CONTEXT.md or `index.yaml`.
+- [ ] Cross-check each project's `index.yaml` `last_session` value against git log. If they disagree, the git log wins; update `index.yaml` before proceeding.
+- [ ] Invoke the `synthesis-checkpoint` skill on any project whose cached state may be stale — it is the codified protocol for this verification.
+
+This step is the L2 (skill-rule) anchor of the temporal & continuity discipline. The L1 (Claude Code hooks) and L3 (CLAUDE.md item 13c–13e) reinforce it. See `synthesis-context-lifecycle` Session Start Protocol for the underlying rationale.
+
+### 2. Context Optimization
 
 **Archive FIRST, delete second. Never remove content from CONTEXT.md until it exists in its destination (sessions/ or REFERENCE.md). Two-phase commit.**
 
 - [ ] Check CONTEXT.md line count for each active project. If >120 lines, archive before starting work.
-- [ ] Archive completed items and old session summaries to `sessions/YYYY-MM.md` FIRST.
+- [ ] Archive completed items and old session summaries to `sessions/YYYY-MM.md` FIRST. **Use today's verified date (from step 1) when writing the entry header — do not infer from session continuity.**
 - [ ] Archive any newly-stable facts to REFERENCE.md FIRST.
 - [ ] Verify archived content exists in destination files.
 - [ ] Only then rewrite CONTEXT.md with archived content removed.
-- [ ] Update `last_session` date in `index.yaml`.
+- [ ] Update `last_session` date in `index.yaml` — use today's verified date.
 
-### 2. Sync
+### 3. Sync
 
 This step has three sub-steps. They run in order — source code first (so any draft can ground itself in current code), then channels (so the catch-up read uses today's messages), then transcripts of any auto-recorded meetings.
 
-#### 2a. Source-Code Sync
+#### 3a. Source-Code Sync
 
 Before drafting the daily plan, sync every source-code repo associated with active work in the current workspace. This makes sure any code-grounded drafts (PR reviews, technical replies, status messages citing specific files or commits) reference current state, not yesterday's.
 
@@ -158,13 +180,13 @@ Before drafting the daily plan, sync every source-code repo associated with acti
 
 The set of remotes for each repo comes from `git remote -v` inside that repo. The skill does NOT need a separate per-remote config — the repo itself is the source of truth for its own remote layout. When a workspace's primary remote changes (e.g., a migration from one Git host to another), the change happens in the local repo's `git remote -v`, and this step picks it up automatically.
 
-#### 2b. Slack Sync
+#### 3b. Slack Sync
 
 - [ ] Check for new PRs, CI results, overnight pushes (now that local repos are current).
 - [ ] **Run `/synthesis-slack-sync`** — the `synthesis-slack-sync` skill handles the full Slack sync protocol: verify connector auth, read all channels, re-read all threads with replies, check DMs, save to local transcripts, and update the action plan. See that skill for the detailed protocol and the rationale behind each step. Configuration is in `.agents/slack-sync.yaml` per project, with `.claude/slack-sync.yaml` supported for existing projects.
 - [ ] Run any project-specific sync steps (see project supplement).
 
-#### 2c. Meeting Transcripts
+#### 3c. Meeting Transcripts
 
 After any standup, planning session, or design review with auto-generated notes (e.g., Gemini in Google Meet):
 
@@ -180,7 +202,7 @@ After any standup, planning session, or design review with auto-generated notes 
 - [ ] Read transcript and extract action items, decisions, status changes.
 - [ ] Update CONTEXT.md with any new information from the meeting.
 
-### 3. Catch-Up Read
+### 4. Catch-Up Read
 
 **Cross-check before proposing action. An item that looks open in CONTEXT.md may already be resolved in Slack (or vice versa). The source of truth is the actual thread, not the action item list.**
 
@@ -189,12 +211,12 @@ After any standup, planning session, or design review with auto-generated notes 
 - [ ] Note new action items, status changes on waiting items, and signals worth responding to.
 - [ ] Remove or mark completed any CONTEXT.md items that Slack evidence shows are resolved.
 
-### 4. PR Review Queue
+### 5. PR Review Queue
 
 - [ ] Check for PRs awaiting your review (lead integration review or peer review).
 - [ ] Note age of oldest pending PR — anything >2 days old is a bottleneck.
 
-### 5. Day Plan
+### 6. Day Plan
 
 - [ ] **Review yesterday's daily plan** (`daily-plans/YYYY-MM-DD.md`). Identify: uncompleted tasks to carry forward, draft messages that were never sent, items that are now stale due to overnight Slack activity, and "waiting on others" items that may have been resolved.
 - [ ] **Cross-reference yesterday's plan with today's Slack sync.** A task marked incomplete yesterday may have been resolved overnight. A draft message from yesterday may no longer be accurate due to code changes, PR merges, or Slack replies. Do not blindly carry forward — verify each item is still valid and current.
@@ -206,7 +228,7 @@ After any standup, planning session, or design review with auto-generated notes 
 - [ ] Update the action plan throughout the day as tasks complete or change — it is a living document, not a static morning capture.
 - [ ] **Always include a clickable link to the action plan file** in your response when creating, updating, or referencing it. Use the absolute path in markdown link format: `[2026-03-23.md](/absolute/path/to/daily-plans/2026-03-23.md)`. Never use relative paths — they don't resolve in the IDE.
 
-### 6. Morning Messages
+### 7. Morning Messages
 
 - [ ] Post standup updates or morning status in relevant channels.
 - [ ] Send motivational replies acknowledging overnight work (engineers who feel seen ship faster).
@@ -265,7 +287,7 @@ The user's professional reputation depends on accuracy. A wrong technical claim 
 ### Scope
 
 This protocol applies everywhere draft messages are created:
-- Morning messages (Day-Start Step 6)
+- Morning messages (Day-Start Step 7)
 - Mid-day sync replies (synthesis-slack-sync Step 5)
 - End-of-day communications (Day-End Step 3)
 - Ad-hoc message requests throughout the day
@@ -579,7 +601,7 @@ When observer mode is reinvented per conversation ("do the thing you did yesterd
 
 ### 2. Source-Code Sync
 
-End-of-day code sync ensures local main/develop reflects everything that landed during the day and that tomorrow's day-start begins from a clean, current state. Run the same source-code sync as Day-Start Step 2a — same workspace repo list, same fetch + fast-forward semantics, same surfacing of divergence.
+End-of-day code sync ensures local main/develop reflects everything that landed during the day and that tomorrow's day-start begins from a clean, current state. Run the same source-code sync as Day-Start Step 3a — same workspace repo list, same fetch + fast-forward semantics, same surfacing of divergence.
 
 - [ ] For each source-code repo in the workspace's `CLAUDE.md` "Workspace Repos" table: `git fetch --all`, then `git pull --ff-only` on each long-running branch (typically `main` and `develop`).
 - [ ] Surface any branches that are diverged or have local-only commits not yet pushed. These are decisions to make NOW, not at next day-start, so the agent can act on them while context is fresh.
@@ -612,11 +634,16 @@ This step is intentionally not "merge ready PRs" — that's Integration Sweep be
 
 ### 7. Context Capture
 
-- [ ] Update CONTEXT.md with day's progress and new state.
+**Date discipline (matches Day-Start Step 1 and CLAUDE.md item 13c–13e).** All session-log entries and CONTEXT.md updates written tonight MUST use today's verified date — not a date inferred from session continuity or memory. If the conversation has been running for multiple days, the AI's sense of "today" may be wrong by hours or days. Re-anchor before writing.
+
+- [ ] Run `date "+%Y-%m-%d %H:%M:%S %Z (%A)"` once at the start of this step. Use the output as today's authoritative date for every file write that follows. (If `synthesis-checkpoint` is loaded, invoke it instead — it does this anchoring plus a git-log cross-check.)
+- [ ] For each project worked on today: append a session-log entry to `sessions/YYYY-MM.md` with today's verified date in the header. Format the date as ISO `YYYY-MM-DD` (e.g., `## 2026-05-27 (Wed) — Day-end summary`).
+- [ ] Update CONTEXT.md with day's progress and new state. Refresh the "Last session" field with today's verified date. Update "Recent Sessions" with a one-line summary.
 - [ ] Update MEMORY.md if current state info is stale (version numbers, environment status, team assignments).
-- [ ] Update `last_session` date in `index.yaml` for each active project worked on today.
-- [ ] Commit and push context changes to ai-knowledge repos.
-- [ ] Push updates to any shared ai-knowledge repos if modified.
+- [ ] Update `last_session` date in `index.yaml` for each active project worked on today — use today's verified date.
+- [ ] Commit context changes per the Commit Protocol below — separate commit per logical group (project context updates, lessons learned, etc.). Use `git add <specific-files>`, NOT `git add -A`.
+- [ ] **Push and verify.** Run `git push` for each modified repo, then run `git log origin/main..HEAD` to confirm the local HEAD reached origin. If the output is non-empty, the push did not land — investigate (network failure, branch protection rule, merge conflict) and re-push. Do NOT assume "git push said success" means the commits are durable on the remote.
+- [ ] Push updates to any shared ai-knowledge repos if modified. Same push-verify step applies.
 
 ### 8. Skills Maintenance
 

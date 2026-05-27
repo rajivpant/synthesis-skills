@@ -5,7 +5,7 @@ license: "CC0-1.0"
 depends_on: []
 metadata:
   author: "Rajiv Pant"
-  version: "1.1.0"
+  version: "1.2.0"
   source_repo: "github.com/synthesisengineering/synthesis-skills"
   source_type: "public"
 ---
@@ -227,6 +227,69 @@ Archived from CONTEXT.md on YYYY-MM-DD. See REFERENCE.md for stable project fact
 
 [Summary: 5-15 lines per session. What was done, decisions made, outcomes.]
 ```
+
+---
+
+## Session Start Protocol — MANDATORY before substantive project work
+
+The tiered architecture (CONTEXT.md / REFERENCE.md / sessions/) is only useful if the agent reads it. LLMs default to working from in-context memory; rules at session start lose salience as conversation grows. The Session Start Protocol makes the read explicit and non-skippable.
+
+When you (the AI agent) begin substantive work on any project — whether at the literal start of a Claude Code session, when the user first mentions a project in conversation, or when resuming a project after working on something else — run these steps in order BEFORE any other action:
+
+1. **Verify current time.** Run `date "+%Y-%m-%d %H:%M:%S %Z (%A)"`. The model has no clock; the OS does. Use the output as your authoritative "today" anchor for the rest of the session. The harness may have injected a date earlier, but that injection drifts; `date` does not.
+2. **Verify project history from git.** Run `git log -10 --pretty=format:"%h %ai %s" -- <project-path>`. The output is the source of truth for "what happened when in this project." Note the most recent commit's timestamp and subject.
+3. **Read CONTEXT.md.** This is the project's working memory. Read the full file. Note the "Last session" header but treat it as a cache — compare it to step 2's git output. If CONTEXT.md is older than the most recent commit, the file is stale and needs an update before the session ends.
+4. **Read the latest entry in sessions/YYYY-MM.md.** This is the most recent narrative of what was done. Read at minimum the last session entry (the bottom of the file). If your session-start verification revealed CONTEXT.md was stale, also read any entries between CONTEXT.md's claimed "last session" and the current most-recent commit.
+5. **Skim REFERENCE.md if you have not recently.** This is the project's stable facts and design spec. Full read on the first session resumption of the day; quick skim of section headers otherwise.
+6. **Only then begin substantive work.**
+
+**Why this order matters.** Steps 1 and 2 establish ground truth from external sources (OS clock, git). Step 3 reads the cache. Step 4 reads the most recent narrative. The order means by the time you act, you have verified facts AND the project's own framing — and you have noticed any discrepancy between them.
+
+**Visible to the user.** Show the verification step in your first response of the session. Example:
+
+> Session start verified. Today: 2026-05-27 10:49 EDT (Wednesday). Last project commit: 2026-05-26 12:47 EDT (`51b8e6d`, "Maintain context: refresh inbox-cleanup CONTEXT.md"). CONTEXT.md matches git log. Proceeding with [next task].
+
+The visible verification is the L4 cross-tool drift-detection mechanism — the user must be able to see that ground truth was checked.
+
+---
+
+## Mid-Session Refresh Protocol — MANDATORY under drift conditions
+
+Long conversations cause context drift. The mid-session refresh protocol re-syncs the agent against ground truth without requiring a full restart.
+
+**Mandatory triggers.** Re-run the Session Start Protocol (or invoke the `synthesis-checkpoint` skill, which is the codified version of these steps) under ANY of these conditions:
+
+- **Before any time-interval claim in output.** "Yesterday", "N days ago", "last session", "this week", "earlier today" — verify with `date` and `git log` BEFORE generating the claim. After-the-fact correction is more expensive than upfront verification.
+- **After a long real-time pause.** If `date` reveals more than 1 hour has passed since you last checked, re-read CONTEXT.md and re-run `git log`. Long pauses correlate with the user resuming after a break — the world may have changed.
+- **After ~25 substantive tool calls** since the last refresh. This is the unconditional cadence: even with no drift signal, re-read CONTEXT.md and `git log` to verify your accumulated context still matches disk.
+- **On any drift signal:**
+  - You say or think "I don't recall" about a recent decision
+  - A file read returns content you didn't expect
+  - The user references a decision you have no record of
+  - The user corrects you ("that's not right", "actually...", "you said earlier...")
+  - You notice the conversation has touched many topics and feel uncertain about project state
+- **Before writing to a session-log file** (a markdown file under `sessions/`). The date you write into the header MUST be from `date`, not from memory.
+- **Before generating a commit message that mentions dates or intervals.** The interval claim must be backed by `git log`.
+
+**The protocol itself.** Run the steps from synthesis-checkpoint (preferred if loaded), or as a fallback the same steps inline:
+
+1. `date "+%Y-%m-%d %H:%M:%S %Z (%A)"` — verify current time
+2. `git log -10 --pretty=format:"%h %ai %s" -- <project-path>` — verify project history
+3. Re-read CONTEXT.md from disk
+4. Re-read the latest sessions/YYYY-MM.md entry
+5. Reconcile: where does in-context memory disagree with disk/git? Report the discrepancy in the next response.
+6. If CONTEXT.md is stale, update it. Commit and push the correction separately.
+
+**Compaction detection signals.** Context-window compaction (the harness summarizing older turns) is opaque — you cannot reliably detect when it happened. Treat these as red flags suggesting compaction may have occurred:
+
+- You suddenly cannot recall the user's stated goal for the session
+- A task you remember as in-progress has unclear next steps
+- Tool outputs reference files or decisions you have no context for
+- Your last few tool calls feel disconnected from the current request
+
+When any of these fire, run the Mid-Session Refresh Protocol unconditionally.
+
+**Delegation.** When the `synthesis-checkpoint` skill is available, prefer invoking it — it is the canonical codification of this protocol, runs the same steps every time, and produces consistent visible output the user can spot. Use the inline fallback only when synthesis-checkpoint is not loaded.
 
 ---
 
