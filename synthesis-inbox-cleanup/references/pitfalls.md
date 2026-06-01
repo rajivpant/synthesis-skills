@@ -107,6 +107,33 @@ This is not specific to inbox-cleanup, but it bit this project hard during multi
 
 **The signal to abstract:** when this pattern occurs a second time for a different sender, the engine should grow real support — either `subject_not_contains` in the existing `subject_rules` structure, or a separate `subject_exclude_rules` table. Until then, document each occurrence here so the eventual abstraction has multiple cases to design against. (Premature abstraction from one case commits to a wrong API.)
 
+## Subject rules required a `domain` clause and only matched substrings — calendar protocol responses had no clean rule shape
+
+**Incident:** Meeting acceptance / decline / tentative / canceled-event responses from colleagues were piling up in inbox because the manifest engine couldn't express the natural rule shape: "any sender, subject starts with `Accepted:` (or `Declined:` etc.) → archive." Two specific gaps surfaced together:
+
+1. `subject_rules` entries REQUIRED a `domain` clause, so a rule matching across all senders couldn't be written.
+2. Only `subject_contains` (substring match) was supported, so prefix-anchored matches like "starts with `Accepted:`" had to use substring matching, which falsely matches replies like `Re: Accepted:` from humans discussing an acceptance.
+
+The pattern is general: calendar-protocol mail (Google Calendar, Microsoft Outlook, Apple Calendar) uses standardized subject prefixes regardless of which colleague sent the response. Any subject-prefix-driven routing across heterogeneous senders has the same shape.
+
+**Fix (shipped in v1.2.0):** Two engine extensions, both backward-compatible with the existing rules.yaml entries:
+
+1. `subject_rules` entries may now omit the `domain` clause. Absent domain = any-sender rule.
+2. New `subject_starts_with` operator alongside the existing `subject_contains`. Prefix-anchored match; safer than substring for canonical-prefix patterns.
+
+Example — archive calendar-response noise regardless of sender:
+
+```yaml
+subject_rules:
+  - {if: {subject_starts_with: "Accepted:"}, disposition: archive}
+  - {if: {subject_starts_with: "Declined:"}, disposition: archive}
+  - {if: {subject_starts_with: "Tentative:"}, disposition: archive}
+  - {if: {subject_starts_with: "Canceled event:"}, disposition: archive}
+  - {if: {subject_starts_with: "Cancelled event:"}, disposition: archive}
+```
+
+**What was deliberately NOT shipped:** `subject_not_contains` (the negation operator from the Zoom case above). That remains a separate gap because the negation use case is for sender-anchored mixed-content streams, not subject-anchored protocol patterns. The two shapes don't share an API. Documenting both occurrences here so the next abstraction (negation) has its own clean design.
+
 ---
 
 These pitfalls were collected from real incidents during the development of this skill. Each one cost time, money, or risk. Adding a new pitfall to this file is part of the cost of resolving any new bug in the engine — better to document it now than rediscover it later.

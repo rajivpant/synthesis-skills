@@ -94,8 +94,20 @@ def resolve(name, addr, domain, subject):
             return "keep", "never_touch"
     for sr in RULES.get("subject_rules", []):
         c = sr.get("if", {})
-        if "domain" in c and dom_match(domain, c["domain"]) and c.get("subject_contains", "").lower() in sl:
-            return sr["disposition"], "subject_rule"
+        # Domain check: if domain is specified, it must match. Absent domain = any-sender rule.
+        if "domain" in c and not dom_match(domain, c["domain"]):
+            continue
+        # Subject check: subject_contains is a substring match; subject_starts_with is a prefix match.
+        # At least one of the two must be specified and must match. Both specified = both must match.
+        sc = c.get("subject_contains", "").lower()
+        ssw = c.get("subject_starts_with", "").lower()
+        if not sc and not ssw:
+            continue  # malformed rule (no subject operator)
+        if sc and sc not in sl:
+            continue
+        if ssw and not sl.startswith(ssw):
+            continue
+        return sr["disposition"], "subject_rule"
     sset = RULES.get("senders", [])
     for s in sset:
         m = s.get("match", {})
